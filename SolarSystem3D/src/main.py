@@ -111,18 +111,25 @@ def draw_stars():
     glEnable(GL_LIGHTING)
 
 
-def setup_lighting():
+def setup_lighting(full_bright=False):
     glEnable(GL_LIGHTING)
     glEnable(GL_LIGHT0)
     glEnable(GL_COLOR_MATERIAL)
 
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
 
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.10, 0.10, 0.13, 1.0))
-
     glLightfv(GL_LIGHT0, GL_POSITION, (0, 0, 0, 1))
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 0.92, 0.75, 1.0))
-    glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
+
+    if full_bright:
+        # Nền trắng: sáng phẳng, mọi hành tinh hiện đủ màu
+        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (1.0, 1.0, 1.0, 1.0))
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.0, 0.0, 0.0, 1.0))
+        glLightfv(GL_LIGHT0, GL_SPECULAR, (0.0, 0.0, 0.0, 1.0))
+    else:
+        # Nền đen: chiếu sáng theo Mặt Trời
+        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.10, 0.10, 0.13, 1.0))
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 0.92, 0.75, 1.0))
+        glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
 
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_NORMALIZE)
@@ -213,7 +220,7 @@ def main():
         draw_stars()
 
         # Ánh sáng (đặt sau gluLookAt để đèn đứng đúng tại Mặt Trời)
-        setup_lighting()
+        setup_lighting(white_bg)
 
         # Quỹ đạo và vành đai tiểu hành tinh
         glDisable(GL_LIGHTING)
