@@ -5,8 +5,17 @@ from OpenGL.GL import *
 _belt_list = None
 
 
-def draw_orbit(radius, segments=180):
-    """Quy dao tron mo tren mat phang XZ."""
+def orbit_position(semi_major_axis, eccentricity, angle):
+    """Return an elliptical orbit position with the Sun at one focus."""
+    semi_minor_axis = semi_major_axis * math.sqrt(1.0 - eccentricity ** 2)
+    center_offset = semi_major_axis * eccentricity
+    x = semi_major_axis * math.cos(angle) - center_offset
+    z = semi_minor_axis * math.sin(angle)
+    return x, z
+
+
+def draw_orbit(semi_major_axis, eccentricity=0.0, segments=180):
+    """Draw an elliptical orbit on the XZ plane."""
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glEnable(GL_LINE_SMOOTH)
@@ -15,7 +24,8 @@ def draw_orbit(radius, segments=180):
     glBegin(GL_LINE_LOOP)
     for i in range(segments):
         angle = 2.0 * math.pi * i / segments
-        glVertex3f(radius * math.cos(angle), 0.0, radius * math.sin(angle))
+        x, z = orbit_position(semi_major_axis, eccentricity, angle)
+        glVertex3f(x, 0.0, z)
     glEnd()
 
     glDisable(GL_BLEND)

@@ -225,7 +225,10 @@ def main():
         # Quỹ đạo và vành đai tiểu hành tinh
         glDisable(GL_LIGHTING)
         for planet in PLANETS:
-            draw_orbit(planet["orbit_radius"])
+            draw_orbit(
+                planet["orbit_radius"],
+                planet["orbit_eccentricity"],
+            )
         draw_asteroid_belt(sim_time)
         glEnable(GL_LIGHTING)
 

@@ -111,14 +111,18 @@ Sử dụng các hình cầu để biểu diễn Mặt Trời và các hành tin
 
 ### 7.3. Thuật toán quỹ đạo
 
-Tính tọa độ của hành tinh trên quỹ đạo tròn bằng các hàm lượng giác:
+Tính tọa độ của hành tinh trên quỹ đạo elip bằng các hàm lượng giác. Mặt Trời
+được đặt tại một tiêu điểm của mỗi quỹ đạo:
 
 ```python
-x = radius * cos(angle)
-z = radius * sin(angle)
+x = semi_major_axis * cos(angle) - semi_major_axis * eccentricity
+z = semi_minor_axis * sin(angle)
+semi_minor_axis = semi_major_axis * sqrt(1 - eccentricity ** 2)
 ```
 
-Trong đó `radius` là bán kính quỹ đạo và `angle` là góc quay hiện tại.
+Trong đó `semi_major_axis` là bán trục lớn, `eccentricity` là độ lệch tâm và
+`angle` là góc quay hiện tại. Các thông số này được dùng đồng nhất khi vẽ
+quỹ đạo và tính vị trí hành tinh.
 
 ### 7.4. Phép chiếu phối cảnh
 
