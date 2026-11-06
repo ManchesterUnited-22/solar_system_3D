@@ -5,8 +5,11 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective, gluLookAt
 
-from planet import PLANETS, init_planets, draw_sun, draw_planet
+from planet import (PLANETS, init_planets, draw_sun, draw_planet,
+                    set_wire_background)
 from orbit import draw_orbit, draw_asteroid_belt
+from axes import draw_axes
+import properties_panel as ui
 
 WIDTH, HEIGHT = 1200, 800
 
@@ -24,8 +27,16 @@ sim_time = 0.0
 sim_speed = 1.0
 paused = False
 
-# Nền trắng (chuột phải hoặc phím B để đổi)
+# Nền trắng (phím B để đổi)
 white_bg = False
+
+# Chế độ khung mô hình hóa (chuột phải để bật/tắt)
+wireframe = False
+
+# Tab đang chọn của bảng Properties:
+#   0 = SHOW AXES (hiện trục XYZ, ẩn quỹ đạo và thiên thạch)
+#   1 = HIDE AXES (không hiện trục, hiện quỹ đạo và thiên thạch)
+ui_tab = 1
 
 # Tạo sao nền
 random.seed(10)
@@ -44,17 +55,27 @@ for _ in range(900):
 
 
 def mouse_button_callback(window, button, action, mods):
-    global dragging, last_x, last_y, white_bg
+    global dragging, last_x, last_y, wireframe, ui_tab
 
     if button == glfw.MOUSE_BUTTON_LEFT:
         if action == glfw.PRESS:
+            x, y = glfw.get_cursor_pos(window)
+            hit = ui.hit_test(x, y, ui_tab)
+            if hit is not None:
+                # Bấm vào bảng Properties: chọn tab, không xoay camera
+                if hit in (0, 1):
+                    ui_tab = hit
+                return
             dragging = True
-            last_x, last_y = glfw.get_cursor_pos(window)
+            last_x, last_y = x, y
         elif action == glfw.RELEASE:
             dragging = False
 
     elif button == glfw.MOUSE_BUTTON_RIGHT and action == glfw.PRESS:
-        white_bg = not white_bg
+        # Bật/tắt khung mô hình hóa (hình cầu dạng lưới)
+        wireframe = not wireframe
+        title = "Solar System 3D - Khung mô hình hóa" if wireframe else "Solar System 3D"
+        glfw.set_window_title(window, title)
 
 
 def cursor_position_callback(window, xpos, ypos):
@@ -190,9 +211,11 @@ def main():
 
         # Màu nền: đen (mặc định) hoặc trắng
         if white_bg:
-            glClearColor(1.0, 1.0, 1.0, 1.0)
+            bg = (1.0, 1.0, 1.0)
         else:
-            glClearColor(0.008, 0.012, 0.035, 1.0)
+            bg = (0.008, 0.012, 0.035)
+        glClearColor(bg[0], bg[1], bg[2], 1.0)
+        set_wire_background(bg)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # Phép chiếu phối cảnh
@@ -224,18 +247,26 @@ def main():
 
         # Quỹ đạo và vành đai tiểu hành tinh
         glDisable(GL_LIGHTING)
-        for planet in PLANETS:
-            draw_orbit(
-                planet["orbit_radius"],
-                planet["orbit_eccentricity"],
-            )
-        draw_asteroid_belt(sim_time)
+        if ui_tab == 0:
+            # Tab SHOW AXES: hiện hệ trục XYZ, bỏ quỹ đạo và thiên thạch
+            draw_axes()
+        else:
+            for planet in PLANETS:
+                draw_orbit(
+                    planet["orbit_radius"],
+                    planet["orbit_eccentricity"],
+                )
+            draw_asteroid_belt(sim_time)
         glEnable(GL_LIGHTING)
 
         # Mặt Trời và hành tinh
-        draw_sun(sim_time)
+        draw_sun(sim_time, wireframe)
         for planet in PLANETS:
-            draw_planet(planet, sim_time)
+            draw_planet(planet, sim_time, wireframe)
+
+        # Bảng Properties (vẽ đè lên trên cùng)
+        win_w, win_h = glfw.get_window_size(window)
+        ui.draw_panel(ui_tab, win_w, win_h)
 
         glfw.swap_buffers(window)
 

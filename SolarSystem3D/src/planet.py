@@ -2,8 +2,8 @@ import math
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import (gluNewQuadric, gluDeleteQuadric, gluQuadricTexture,
-                        gluQuadricNormals, gluSphere, gluBuild2DMipmaps,
-                        GLU_SMOOTH)
+                        gluQuadricNormals, gluQuadricDrawStyle, gluSphere,
+                        gluBuild2DMipmaps, GLU_SMOOTH, GLU_LINE)
 from orbit import orbit_position
 
 TEX_W, TEX_H = 1024, 512
@@ -297,7 +297,24 @@ PLANETS = [
 # =====================================================================
 
 _sphere_list = None
+_wire_list = None      # hình cầu dạng lưới (khung mô hình hóa)
+_solid_list = None     # hình cầu đặc tô màu nền, để che các đường lưới phía sau
+_wire_bg = (0.008, 0.012, 0.035)   # màu nền hiện tại (main.py cập nhật mỗi khung hình)
 _tex = {}
+
+# Màu đường lưới của từng thiên thể ở chế độ khung mô hình
+WIRE_COLORS = {
+    "Sun": (1.0, 0.80, 0.20),
+    "Moon": (0.80, 0.80, 0.80),
+    "Mercury": (0.75, 0.70, 0.65),
+    "Venus": (1.00, 0.80, 0.45),
+    "Earth": (0.30, 0.65, 1.00),
+    "Mars": (1.00, 0.45, 0.25),
+    "Jupiter": (0.95, 0.75, 0.50),
+    "Saturn": (0.95, 0.88, 0.55),
+    "Uranus": (0.55, 0.95, 0.95),
+    "Neptune": (0.35, 0.50, 1.00),
+}
 _glow_tex = None
 _halo_tex = None
 
@@ -389,7 +406,7 @@ def _build_rings(kind, inner, outer, rng, steps=200, seg=128):
 
 def init_planets():
     """Goi 1 lan SAU khi da co OpenGL context."""
-    global _sphere_list, _glow_tex, _halo_tex
+    global _sphere_list, _wire_list, _solid_list, _glow_tex, _halo_tex
 
     rng = np.random.default_rng(7)
 
@@ -402,10 +419,42 @@ def init_planets():
     glEndList()
     gluDeleteQuadric(q)
 
+    # Hình cầu dạng lưới kinh tuyến - vĩ tuyến (cực của hình cầu nằm trên trục z)
+    n_lat, n_lon, seg = 12, 20, 48
+    _wire_list = glGenLists(1)
+    glNewList(_wire_list, GL_COMPILE)
+    for i in range(1, n_lat):                     # vĩ tuyến
+        lat = math.radians(-90.0 + 180.0 * i / n_lat)
+        glBegin(GL_LINE_LOOP)
+        for j in range(seg):
+            a = 2.0 * math.pi * j / seg
+            glVertex3f(math.cos(lat) * math.cos(a),
+                       math.cos(lat) * math.sin(a),
+                       math.sin(lat))
+        glEnd()
+    for k in range(n_lon):                        # kinh tuyến (nửa vòng, từ cực đến cực)
+        lon = 2.0 * math.pi * k / n_lon
+        glBegin(GL_LINE_STRIP)
+        for j in range(seg + 1):
+            t = -math.pi / 2 + math.pi * j / seg
+            glVertex3f(math.cos(t) * math.cos(lon),
+                       math.cos(t) * math.sin(lon),
+                       math.sin(t))
+        glEnd()
+    glEndList()
+
+    # Hình cầu đặc nhỏ hơn một chút: tô màu nền để che nửa lưới phía sau
+    qs = gluNewQuadric()
+    _solid_list = glGenLists(1)
+    glNewList(_solid_list, GL_COMPILE)
+    gluSphere(qs, 0.99, 48, 32)
+    glEndList()
+    gluDeleteQuadric(qs)
+
     for key, fn in _BUILDERS.items():
         _tex[key] = _upload(fn(rng))
 
-    _glow_tex = _radial_texture(lambda r: np.where(r < 1, (1 - r) ** 2.4, 0))
+    _glow_tex = _radial_texture(lambda r: np.where(r < 1, np.clip(1 - r, 0, None) ** 2.4, 0))
     _halo_tex = _radial_texture(lambda r: np.exp(-((r - 0.72) / 0.10) ** 2))
 
     for p in PLANETS:
@@ -465,7 +514,66 @@ def _draw_billboard(tex, half, color):
     glPopMatrix()
 
 
-def draw_sun(t):
+def set_wire_background(rgb):
+    """main.py gọi mỗi khung hình để khung mô hình biết màu nền hiện tại."""
+    global _wire_bg
+    _wire_bg = tuple(rgb)
+
+
+def _line_color(color):
+    # Nền sáng: làm đậm màu đường lưới để vẫn nhìn rõ
+    if sum(_wire_bg) > 2.0:
+        return tuple(c * 0.55 for c in color)
+    return tuple(color)
+
+
+def _wire_sphere(radius, color, spin=0.0):
+    """Hình cầu dạng khung lưới, chỉ thấy nửa lưới phía trước (không texture, không ánh sáng)."""
+    glDisable(GL_LIGHTING)
+    glDisable(GL_TEXTURE_2D)
+    glPushMatrix()
+    glScalef(radius, radius, radius)
+
+    # 1) Hình cầu đặc màu nền: che các đường lưới nằm phía sau
+    glColor3f(*_wire_bg)
+    glCallList(_solid_list)
+
+    # 2) Các đường kinh tuyến, vĩ tuyến (quay theo spin)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    glEnable(GL_LINE_SMOOTH)
+    glLineWidth(1.0)
+    glColor4f(*_line_color(color), 1.0)
+    glRotatef(spin, 0, 0, 1)
+    glCallList(_wire_list)
+    glDisable(GL_BLEND)
+    glPopMatrix()
+
+
+def _wire_rings(planet, color, segments=96):
+    """Vành đai ở chế độ khung: hai đường tròn trong và ngoài."""
+    rg = planet["rings"]
+    s = planet["radius"]
+    glDisable(GL_LIGHTING)
+    glDisable(GL_TEXTURE_2D)
+    glColor3f(*_line_color(color))
+    for rr in (rg["inner"], rg["outer"]):
+        glBegin(GL_LINE_LOOP)
+        for j in range(segments):
+            a = 2.0 * math.pi * j / segments
+            glVertex3f(rr * s * math.cos(a), rr * s * math.sin(a), 0.0)
+        glEnd()
+
+
+def draw_sun(t, wireframe=False):
+    if wireframe:
+        glPushMatrix()
+        glRotatef(-90, 1, 0, 0)
+        _wire_sphere(1.5, WIRE_COLORS["Sun"], t * 4.0)
+        glPopMatrix()
+        glEnable(GL_LIGHTING)
+        return
+
     glDisable(GL_LIGHTING)
     glPushMatrix()
     glRotatef(-90, 1, 0, 0)
@@ -477,12 +585,15 @@ def draw_sun(t):
     glEnable(GL_LIGHTING)
 
 
-def _draw_moon(m, t):
+def _draw_moon(m, t, wireframe=False):
     a = math.radians(t * m["speed"])
     glPushMatrix()
     glTranslatef(m["dist"] * math.cos(a), 0.0, m["dist"] * math.sin(a))
     glRotatef(-90, 1, 0, 0)
-    _textured_sphere(m["tex"], m["radius"], math.degrees(a) + 180.0)
+    if wireframe:
+        _wire_sphere(m["radius"], WIRE_COLORS["Moon"], math.degrees(a) + 180.0)
+    else:
+        _textured_sphere(m["tex"], m["radius"], math.degrees(a) + 180.0)
     glPopMatrix()
 
 
@@ -499,7 +610,7 @@ def _draw_rings(planet):
     glPopMatrix()
 
 
-def draw_planet(planet, t):
+def draw_planet(planet, t, wireframe=False):
     ang = math.radians(planet["phase"] + t * planet["orbit_speed"])
     x, z = orbit_position(
         planet["orbit_radius"],
@@ -513,10 +624,20 @@ def draw_planet(planet, t):
     glTranslatef(x, 0.0, z)
 
     if planet.get("moon"):
-        _draw_moon(planet["moon"], t)
+        _draw_moon(planet["moon"], t, wireframe)
 
     glRotatef(planet["tilt"], 0, 0, 1)   # nghieng truc
     glRotatef(-90, 1, 0, 0)              # cuc cua quadric -> truc Y
+
+    if wireframe:
+        # Khung mô hình: hành tinh = hình cầu lưới, vành đai = 2 đường tròn
+        color = WIRE_COLORS[planet["name"]]
+        _wire_sphere(r, color, spin)
+        if planet.get("rings"):
+            _wire_rings(planet, color)
+        glEnable(GL_LIGHTING)
+        glPopMatrix()
+        return
 
     _textured_sphere(planet["tex"], r, spin)
 
