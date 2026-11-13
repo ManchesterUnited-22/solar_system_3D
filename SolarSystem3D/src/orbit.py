@@ -5,33 +5,51 @@ from OpenGL.GL import *
 _belt_list = None
 
 
-def orbit_position(semi_major_axis, eccentricity, angle):
-    """Return an elliptical orbit position with the Sun at one focus."""
-    semi_minor_axis = semi_major_axis * math.sqrt(1.0 - eccentricity ** 2)
-    center_offset = semi_major_axis * eccentricity
-    x = semi_major_axis * math.cos(angle) - center_offset
-    z = semi_minor_axis * math.sin(angle)
-    return x, z
+def solve_kepler(mean_anomaly, eccentricity):
+    """Giải M = E - e*sin(E) bằng Newton, trả về góc lệch tâm E."""
+    M = math.fmod(mean_anomaly, 2.0 * math.pi)
+    E = M if eccentricity < 0.8 else math.pi
+    for _ in range(12):
+        d = (E - eccentricity * math.sin(E) - M) / (1.0 - eccentricity * math.cos(E))
+        E -= d
+        if abs(d) < 1e-9:
+            break
+    return E
 
 
-def draw_orbit(semi_major_axis, eccentricity=0.0, segments=180):
-    """Draw an elliptical orbit on the XZ plane."""
+def _ellipse_point(a, e, E, omega=0.0):
+    """Điểm trên elip (góc lệch tâm E), Mặt Trời ở tiêu điểm, xoay hướng cận nhật một góc omega."""
+    b = a * math.sqrt(1.0 - e * e)
+    x = a * (math.cos(E) - e)
+    z = b * math.sin(E)
+    c, s = math.cos(omega), math.sin(omega)
+    return x * c - z * s, x * s + z * c
+
+
+def orbit_position(semi_major_axis, eccentricity, mean_anomaly, omega=0.0):
+    """Vị trí hành tinh theo định luật Kepler: nhanh ở cận nhật, chậm ở viễn nhật."""
+    E = solve_kepler(mean_anomaly, eccentricity)
+    return _ellipse_point(semi_major_axis, eccentricity, E, omega)
+
+
+def draw_orbit(semi_major_axis, eccentricity=0.0, omega=0.0, segments=240):
+    """Vẽ quỹ đạo elip trên mặt phẳng XZ."""
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glEnable(GL_LINE_SMOOTH)
-    glColor4f(0.55, 0.65, 0.90, 0.28)
+    glColor4f(0.55, 0.65, 0.90, 0.35)
 
     glBegin(GL_LINE_LOOP)
     for i in range(segments):
-        angle = 2.0 * math.pi * i / segments
-        x, z = orbit_position(semi_major_axis, eccentricity, angle)
+        E = 2.0 * math.pi * i / segments
+        x, z = _ellipse_point(semi_major_axis, eccentricity, E, omega)
         glVertex3f(x, 0.0, z)
     glEnd()
 
     glDisable(GL_BLEND)
 
 
-def _build_belt(n=2200, r_in=8.4, r_out=9.2):
+def _build_belt(n=2200, r_in=11.3, r_out=12.0):
     global _belt_list
     rnd = random.Random(5)
     _belt_list = glGenLists(1)

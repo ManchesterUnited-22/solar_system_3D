@@ -243,50 +243,50 @@ _BUILDERS = {
 
 PLANETS = [
     {"name": "Mercury", "texture": "mercury", "radius": 0.25,
-     "orbit_radius": 3.0, "orbit_eccentricity": 0.25,
-     "orbit_speed": 24.0, "phase": 20,
+     "orbit_radius": 3.6, "orbit_eccentricity": 0.40, "orbit_omega": 30,
+     "orbit_speed": 36.3, "phase": 20,
      "spin": 10.0, "tilt": 0.03},
 
     {"name": "Venus", "texture": "venus", "radius": 0.40,
-     "orbit_radius": 4.5, "orbit_eccentricity": 0.22,
-     "orbit_speed": 18.0, "phase": 110,
+     "orbit_radius": 5.2, "orbit_eccentricity": 0.12, "orbit_omega": 100,
+     "orbit_speed": 20.9, "phase": 110,
      "spin": 6.0, "tilt": 177.0,
      "halo": (1.0, 0.80, 0.45, 0.55)},
 
     {"name": "Earth", "texture": "earth", "radius": 0.45,
-     "orbit_radius": 6.0, "orbit_eccentricity": 0.20,
+     "orbit_radius": 6.8, "orbit_eccentricity": 0.20, "orbit_omega": 170,
      "orbit_speed": 14.0, "phase": 200,
      "spin": 90.0, "tilt": 23.4, "clouds": True,
      "halo": (0.35, 0.60, 1.0, 0.85),
      "moon": {"radius": 0.13, "dist": 0.95, "speed": 110.0}},
 
     {"name": "Mars", "texture": "mars", "radius": 0.35,
-     "orbit_radius": 7.5, "orbit_eccentricity": 0.18,
-     "orbit_speed": 11.0, "phase": 300,
+     "orbit_radius": 8.8, "orbit_eccentricity": 0.25, "orbit_omega": 250,
+     "orbit_speed": 9.5, "phase": 300,
      "spin": 85.0, "tilt": 25.2,
      "halo": (1.0, 0.55, 0.35, 0.25)},
 
     {"name": "Jupiter", "texture": "jupiter", "radius": 0.95,
-     "orbit_radius": 10.0, "orbit_eccentricity": 0.16,
-     "orbit_speed": 6.5, "phase": 60,
+     "orbit_radius": 14.5, "orbit_eccentricity": 0.15, "orbit_omega": 40,
+     "orbit_speed": 4.5, "phase": 60,
      "spin": 180.0, "tilt": 3.1},
 
     {"name": "Saturn", "texture": "saturn", "radius": 0.80,
-     "orbit_radius": 13.0, "orbit_eccentricity": 0.14,
-     "orbit_speed": 4.8, "phase": 250,
+     "orbit_radius": 17.0, "orbit_eccentricity": 0.17, "orbit_omega": 320,
+     "orbit_speed": 3.5, "phase": 250,
      "spin": 170.0, "tilt": 26.7,
      "rings": {"kind": "saturn", "inner": 1.25, "outer": 2.3}},
 
     {"name": "Uranus", "texture": "uranus", "radius": 0.60,
-     "orbit_radius": 16.0, "orbit_eccentricity": 0.12,
-     "orbit_speed": 3.4, "phase": 150,
+     "orbit_radius": 19.5, "orbit_eccentricity": 0.13, "orbit_omega": 200,
+     "orbit_speed": 2.9, "phase": 150,
      "spin": 110.0, "tilt": 97.8,
      "halo": (0.50, 0.90, 0.95, 0.35),
      "rings": {"kind": "uranus", "inner": 1.5, "outer": 2.1}},
 
     {"name": "Neptune", "texture": "neptune", "radius": 0.60,
-     "orbit_radius": 19.0, "orbit_eccentricity": 0.10,
-     "orbit_speed": 2.7, "phase": 330,
+     "orbit_radius": 21.5, "orbit_eccentricity": 0.09, "orbit_omega": 120,
+     "orbit_speed": 2.5, "phase": 330,
      "spin": 120.0, "tilt": 28.3,
      "halo": (0.30, 0.50, 1.0, 0.50)},
 ]
@@ -621,6 +621,7 @@ def planet_position(planet, t):
         planet["orbit_radius"],
         planet["orbit_eccentricity"],
         ang,
+        math.radians(planet.get("orbit_omega", 0.0)),
     )
     return x, 0.0, z
 

@@ -5,20 +5,18 @@ Các hành tinh chuyển động trên mặt phẳng XZ, trục Y hướng lên 
 import math
 from OpenGL.GL import *
 
-AXIS_LEN = 22.0        # độ dài mỗi nửa trục (lớn hơn quỹ đạo Neptune)
-TICK_STEP = 2.0        # khoảng cách giữa các vạch chia
+AXIS_LEN = 26.0        
+TICK_STEP = 2.0      
 TICK_SIZE = 0.15
 ARROW_LEN = 1.0
 ARROW_RADIUS = 0.35
 
-# (tên, hướng, hai hướng vuông góc, màu)
 _AXES = (
     ("X", (1, 0, 0), ((0, 1, 0), (0, 0, 1)), (1.00, 0.30, 0.30)),
     ("Y", (0, 1, 0), ((1, 0, 0), (0, 0, 1)), (0.35, 0.95, 0.35)),
     ("Z", (0, 0, 1), ((1, 0, 0), (0, 1, 0)), (0.40, 0.60, 1.00)),
 )
 
-# Nét vẽ của các chữ X, Y, Z (toạ độ -1..1)
 _LETTERS = {
     "X": [((-1, -1), (1, 1)), ((-1, 1), (1, -1))],
     "Y": [((-1, 1), (0, 0)), ((1, 1), (0, 0)), ((0, 0), (0, -1))],

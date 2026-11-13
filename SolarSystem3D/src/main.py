@@ -14,7 +14,7 @@ import properties_panel as ui
 WIDTH, HEIGHT = 1200, 800
 
 # Camera: điều khiển hoàn toàn bằng chuột
-camera_distance = 35.0
+camera_distance = 40.0
 camera_yaw = 45.0
 camera_pitch = 25.0
 
@@ -31,6 +31,9 @@ paused = False
 
 # Nền trắng (phím B để đổi)
 white_bg = False
+
+# Hiện/ẩn các vòng quỹ đạo (phím O để đổi)
+show_orbits = False
 
 # Chế độ khung mô hình hóa (chuột phải để bật/tắt)
 wireframe = False
@@ -228,13 +231,15 @@ def scroll_callback(window, xoffset, yoffset):
 
 
 def key_callback(window, key, scancode, action, mods):
-    global sim_speed, paused, white_bg
+    global sim_speed, paused, white_bg, show_orbits
 
     if action == glfw.RELEASE:
         return
 
     if key == glfw.KEY_SPACE and action == glfw.PRESS:
         paused = not paused
+    elif key == glfw.KEY_O and action == glfw.PRESS:
+        show_orbits = not show_orbits
     elif key == glfw.KEY_UP:
         sim_speed = min(sim_speed * 1.25, 20.0)
     elif key == glfw.KEY_DOWN:
@@ -396,12 +401,14 @@ def main():
         # Quỹ đạo và vành đai tiểu hành tinh
         glDisable(GL_LIGHTING)
         if ui_tab != 0:
-            # Tab HIDE AXES: hiện quỹ đạo và thiên thạch
-            for planet in PLANETS:
-                draw_orbit(
-                    planet["orbit_radius"],
-                    planet["orbit_eccentricity"],
-                )
+            # Tab HIDE AXES: hiện thiên thạch (và quỹ đạo nếu bật bằng phím O)
+            if show_orbits:
+                for planet in PLANETS:
+                    draw_orbit(
+                        planet["orbit_radius"],
+                        planet["orbit_eccentricity"],
+                        math.radians(planet.get("orbit_omega", 0.0)),
+                    )
             draw_asteroid_belt(sim_time)
         glEnable(GL_LIGHTING)
 
