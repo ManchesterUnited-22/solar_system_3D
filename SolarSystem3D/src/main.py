@@ -5,17 +5,14 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective, gluLookAt, gluProject
 
-import planet as planet_mod          # để đọc/ghi INCL_SCALE khi chạy (phím I)
-from planet import (PLANETS, init_planets, draw_sun, draw_planet,
-                    set_wire_background, planet_position, WIRE_COLORS)
-from orbit import draw_orbit, draw_asteroid_belt
-from axes import draw_axes, draw_coord_path, coord_end_points
+from planet import PLANETS, init_planets, draw_sun, draw_planet, planet_position
+from orbit import draw_asteroid_belt
 import properties_panel as ui
 
 WIDTH, HEIGHT = 1200, 800
 
 # Camera: điều khiển hoàn toàn bằng chuột
-camera_distance = 40.0
+camera_distance = 58.0
 camera_yaw = 45.0
 camera_pitch = 25.0
 
@@ -33,23 +30,13 @@ paused = False
 # Nền trắng (phím B để đổi)
 white_bg = False
 
-# Hiện/ẩn các vòng quỹ đạo (phím O để đổi)
-show_orbits = False
 
-# Chế độ khung mô hình hóa (chuột phải để bật/tắt)
-wireframe = False
-
-# Tab đang chọn của bảng Properties:
-#   0 = SHOW AXES (hiện trục XYZ, ẩn quỹ đạo và thiên thạch)
-#   1 = HIDE AXES (không hiện trục, hiện quỹ đạo và thiên thạch)
-ui_tab = 1
 
 # ---------------------------------------------------------------------
 #  Chọn hành tinh: bấm vào hành tinh -> camera phóng to và bám theo nó
 # ---------------------------------------------------------------------
 CLICK_TOLERANCE = 5.0        # pixel: di chuyển ít hơn mức này giữa nhấn và thả = "bấm"
 TRANSITION_TIME = 0.9        # giây
-DIM_ALPHA = 0.15             # độ đậm của trục bị làm mờ
 FOV = 45.0
 
 focus = None                 # chỉ số hành tinh đang chọn (None = nhìn toàn hệ)
@@ -57,9 +44,6 @@ focus_distance = 4.0         # khoảng cách camera khi đang zoom vào hành t
 trans_t = 1.0                # tiến độ chuyển cảnh 0..1
 trans_from_target = (0.0, 0.0, 0.0)
 trans_from_dist = camera_distance
-axis_alpha = {"X": 1.0, "Y": 1.0, "Z": 1.0}   # độ đậm hiện tại của từng trục
-prev_tab = 1                 # tab trước khi tự chuyển sang SHOW AXES
-forced_tab = False
 
 # Ma trận của khung hình gần nhất (để đổi toạ độ 3D -> pixel khi bấm chuột)
 cam_eye = (0.0, 0.0, 0.0)
@@ -105,40 +89,20 @@ def _begin_transition():
 
 
 def select_planet(i):
-    global focus, focus_distance, ui_tab, prev_tab, forced_tab
+    global focus, focus_distance
     _begin_transition()
-    if focus is None:
-        # Cần thấy hệ trục: tự chuyển sang tab SHOW AXES (nhớ lại để trả về sau)
-        forced_tab = (ui_tab != 0)
-        if forced_tab:
-            prev_tab, ui_tab = ui_tab, 0
     focus = i
-    # Zoom đủ gần để hành tinh lớn, nhưng vẫn giữ các trục gần đó trong khung hình.
-    # Tính theo kích thước quỹ đạo (không theo vị trí lúc bấm) nên khoảng cách ổn
-    # định khi hành tinh tiếp tục chạy. Người dùng cuộn chuột để zoom thêm / lùi ra.
+    # Zoom đủ gần để hành tinh lớn. Tính theo kích thước quỹ đạo (không theo vị trí
+    # lúc bấm) nên khoảng cách ổn định khi hành tinh tiếp tục chạy.
+    # Người dùng cuộn chuột để zoom thêm / lùi ra.
     base = max(3.5, PLANETS[i]["radius"] * 7.0)
     focus_distance = max(base, min(10.0, 1.4 * PLANETS[i]["orbit_radius"]))
 
 
 def clear_focus():
-    global focus, ui_tab, forced_tab
+    global focus
     _begin_transition()
     focus = None
-    if forced_tab:
-        ui_tab, forced_tab = prev_tab, False
-
-
-def project_to_window(window, pos):
-    """Toạ độ 3D -> toạ độ cửa sổ (pixel, gốc ở góc trái trên), None nếu sau camera."""
-    if view_mats is None:
-        return None
-    mv, proj, view = view_mats
-    wx, wy, wz = gluProject(pos[0], pos[1], pos[2], mv, proj, view)
-    if wz >= 1.0:
-        return None
-    win_w, win_h = glfw.get_window_size(window)
-    fb_w, fb_h = glfw.get_framebuffer_size(window)
-    return wx * win_w / fb_w, (fb_h - wy) * win_h / fb_h
 
 
 def pick_planet(window, x, y):
@@ -167,42 +131,31 @@ def pick_planet(window, x, y):
 
 
 def mouse_button_callback(window, button, action, mods):
-    global dragging, last_x, last_y, wireframe, ui_tab, forced_tab
+    global dragging, last_x, last_y
     global press_x, press_y
 
-    if button == glfw.MOUSE_BUTTON_LEFT:
-        if action == glfw.PRESS:
-            x, y = glfw.get_cursor_pos(window)
-            hit = ui.hit_test(x, y, ui_tab)
-            if hit is not None:
-                # Bấm vào bảng Properties: chọn tab, không xoay camera
-                if hit in (0, 1):
-                    ui_tab = hit
-                    forced_tab = False       # người dùng đã tự chọn tab
-                return
-            if focus is not None and ui.hit_test_info(x, y, ui_tab, paused):
-                return                       # bấm vào bảng thông tin hành tinh
-            dragging = True
-            last_x, last_y = x, y
-            press_x, press_y = x, y
-        elif action == glfw.RELEASE:
-            if dragging:
-                x, y = glfw.get_cursor_pos(window)
-                if math.hypot(x - press_x, y - press_y) < CLICK_TOLERANCE:
-                    # Nhấn và thả gần như cùng chỗ = bấm (không phải kéo xoay)
-                    idx = pick_planet(window, x, y)
-                    if idx is not None:
-                        if idx != focus:
-                            select_planet(idx)
-                    elif focus is not None:
-                        clear_focus()        # bấm vào khoảng trống: về toàn hệ
-            dragging = False
+    if button != glfw.MOUSE_BUTTON_LEFT:
+        return
 
-    elif button == glfw.MOUSE_BUTTON_RIGHT and action == glfw.PRESS:
-        # Bật/tắt khung mô hình hóa (hình cầu dạng lưới)
-        wireframe = not wireframe
-        title = "Solar System 3D - Khung mô hình hóa" if wireframe else "Solar System 3D"
-        glfw.set_window_title(window, title)
+    if action == glfw.PRESS:
+        x, y = glfw.get_cursor_pos(window)
+        if focus is not None and ui.hit_test_info(x, y):
+            return                           # bấm vào hộp tên hành tinh
+        dragging = True
+        last_x, last_y = x, y
+        press_x, press_y = x, y
+    elif action == glfw.RELEASE:
+        if dragging:
+            x, y = glfw.get_cursor_pos(window)
+            if math.hypot(x - press_x, y - press_y) < CLICK_TOLERANCE:
+                # Nhấn và thả gần như cùng chỗ = bấm (không phải kéo xoay)
+                idx = pick_planet(window, x, y)
+                if idx is not None:
+                    if idx != focus:
+                        select_planet(idx)
+                elif focus is not None:
+                    clear_focus()            # bấm vào khoảng trống: về toàn hệ
+        dragging = False
 
 
 def cursor_position_callback(window, xpos, ypos):
@@ -232,15 +185,13 @@ def scroll_callback(window, xoffset, yoffset):
 
 
 def key_callback(window, key, scancode, action, mods):
-    global sim_speed, paused, white_bg, show_orbits
+    global sim_speed, paused, white_bg
 
     if action == glfw.RELEASE:
         return
 
     if key == glfw.KEY_SPACE and action == glfw.PRESS:
         paused = not paused
-    elif key == glfw.KEY_O and action == glfw.PRESS:
-        show_orbits = not show_orbits
     elif key == glfw.KEY_UP:
         sim_speed = min(sim_speed * 1.25, 20.0)
     elif key == glfw.KEY_DOWN:
@@ -249,16 +200,6 @@ def key_callback(window, key, scancode, action, mods):
         sim_speed = 1.0
     elif key == glfw.KEY_B and action == glfw.PRESS:
         white_bg = not white_bg
-    elif key == glfw.KEY_I and action == glfw.PRESS:
-        # Đổi độ phóng đại góc nghiêng quỹ đạo: 1 (đúng thật) -> 3 -> 5 -> 1
-        levels = [1.0, 3.0, 5.0]
-        cur = planet_mod.INCL_SCALE
-        if cur in levels:
-            nxt = levels[(levels.index(cur) + 1) % len(levels)]
-        else:
-            nxt = 3.0
-        planet_mod.INCL_SCALE = nxt
-        print("INCL_SCALE =", nxt)
     elif key == glfw.KEY_ESCAPE:
         if focus is not None:
             clear_focus()                    # ESC lần 1: về toàn hệ
@@ -353,13 +294,6 @@ def main():
         if trans_t < 1.0:
             trans_t = min(1.0, trans_t + dt / TRANSITION_TIME)
 
-        # Làm mờ dần các trục mà hành tinh đang chọn nằm trên đó
-        # (hành tinh ở mặt phẳng XZ -> trục X và Z mờ, trục Y vẫn rõ)
-        focus_pos = planet_position(PLANETS[focus], sim_time) if focus is not None else None
-        for k, name in enumerate("XYZ"):
-            goal = DIM_ALPHA if (focus_pos and abs(focus_pos[k]) > 1e-6) else 1.0
-            axis_alpha[name] += (goal - axis_alpha[name]) * min(1.0, dt * 6.0)
-
         width, height = glfw.get_framebuffer_size(window)
         if height == 0:
             height = 1
@@ -372,7 +306,6 @@ def main():
         else:
             bg = (0.008, 0.012, 0.035)
         glClearColor(bg[0], bg[1], bg[2], 1.0)
-        set_wire_background(bg)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         # Phép chiếu phối cảnh
@@ -409,63 +342,21 @@ def main():
         # Ánh sáng (đặt sau gluLookAt để đèn đứng đúng tại Mặt Trời)
         setup_lighting(white_bg)
 
-        # Quỹ đạo và vành đai tiểu hành tinh
+        # Quỹ đạo (phím O) và vành đai tiểu hành tinh
         glDisable(GL_LIGHTING)
-        if ui_tab != 0:
-            # Tab HIDE AXES: hiện thiên thạch (và quỹ đạo nếu bật bằng phím O)
-            if show_orbits:
-                for planet in PLANETS:
-                    draw_orbit(
-                        planet["orbit_radius"],
-                        planet["orbit_eccentricity"],
-                        math.radians(planet.get("orbit_omega", 0.0)),
-                        math.radians(planet.get("orbit_incl", 0.0) * planet_mod.INCL_SCALE),
-                        math.radians(planet.get("orbit_node", 0.0)),
-                    )
-            draw_asteroid_belt(sim_time)
+       
+        draw_asteroid_belt(sim_time)
         glEnable(GL_LIGHTING)
 
         # Mặt Trời và hành tinh
-        draw_sun(sim_time, wireframe)
+        draw_sun(sim_time)
         for planet in PLANETS:
-            draw_planet(planet, sim_time, wireframe)
+            draw_planet(planet, sim_time)
 
-        # Tab SHOW AXES: hệ trục XYZ (bỏ quỹ đạo và thiên thạch). Vẽ SAU hành tinh để
-        # quầng sáng Mặt Trời (cộng sáng) không bị trục khoét thủng hay phủ lên trục.
-        if ui_tab == 0:
-            glDisable(GL_LIGHTING)
-            draw_axes(axis_alpha)
-            if focus_pos and paused:
-                # Đang dừng: đường đi dọc từng trục tới vị trí hành tinh
-                draw_coord_path(*focus_pos)
-            glEnable(GL_LIGHTING)
-
-        # Bảng Properties (vẽ đè lên trên cùng)
-        win_w, win_h = glfw.get_window_size(window)
-        ui.draw_panel(ui_tab, win_w, win_h)
-
-        # Khung mô hình hóa: chấm tâm + chữ cái in hoa (A, B, C...) cho từng hành tinh
-        if wireframe:
-            markers = []
-            for i, planet in enumerate(PLANETS):
-                pt = project_to_window(window, planet_position(planet, sim_time))
-                if pt:
-                    markers.append((pt[0], pt[1], chr(ord("A") + i),
-                                    WIRE_COLORS[planet["name"]]))
-            core = (0.0, 0.0, 0.0) if white_bg else (1.0, 1.0, 1.0)
-            ui.draw_center_markers(markers, win_w, win_h, core)
+        # Hành tinh đang chọn: chỉ hiện tên
         if focus is not None:
-            ui.draw_info_panel(PLANETS[focus]["name"].upper(), focus_pos,
-                               paused, ui_tab, win_w, win_h)
-            if paused and ui_tab == 0:
-                # Nhãn số ở đầu đoạn toạ độ trên mỗi trục X, Y, Z
-                tags = []
-                for name, color, p3, v in zip("XYZ", (ui.RED, ui.GREEN, ui.BLUE),
-                                              coord_end_points(*focus_pos), focus_pos):
-                    pt = project_to_window(window, p3)
-                    if pt:
-                        tags.append((pt[0], pt[1], "%s %s" % (name, ui._fmt(v)), color))
-                ui.draw_value_tags(tags, win_w, win_h)
+            win_w, win_h = glfw.get_window_size(window)
+            ui.draw_info_panel(PLANETS[focus]["name"].upper(), win_w, win_h)
 
         glfw.swap_buffers(window)
 

@@ -2,8 +2,8 @@ import math
 import numpy as np
 from OpenGL.GL import *
 from OpenGL.GLU import (gluNewQuadric, gluDeleteQuadric, gluQuadricTexture,
-                        gluQuadricNormals, gluQuadricDrawStyle, gluSphere,
-                        gluBuild2DMipmaps, GLU_SMOOTH, GLU_LINE)
+                        gluQuadricNormals, gluSphere,
+                        gluBuild2DMipmaps, GLU_SMOOTH)
 from orbit import orbit_position
 
 TEX_W, TEX_H = 1024, 512
@@ -234,66 +234,53 @@ _BUILDERS = {
     "mars": tex_mars, "jupiter": tex_jupiter, "saturn": tex_saturn,
     "uranus": tex_uranus, "neptune": tex_neptune,
 }
-# Hệ số độ nghiêng quỹ đạo: 0 = phẳng hẳn, 1 = đúng số liệu thật, 2-3 = phóng đại
-# Hệ số phóng đại độ nghiêng quỹ đạo: 1 = đúng thực tế (gần như phẳng), 3-5 = phóng đại để thấy rõ 3D
-# Phím I trong main.py sẽ đổi giá trị này khi chạy
-INCL_SCALE = 3.0
-
-# orbit_incl: góc nghiêng THẬT so với mặt phẳng hoàng đạo (độ)
-# orbit_eccentricity: giảm bớt để các quỹ đạo không cắt nhau (Mercury giữ gần thật)
+# Tất cả quỹ đạo nằm trên cùng một mặt phẳng (mặt phẳng hoàng đạo) như thực tế.
+# Khoảng cách và độ lệch tâm được chọn để các hành tinh (kể cả Mặt Trăng, vành đai) không chạm nhau.
 PLANETS = [
     {"name": "Mercury", "texture": "mercury", "radius": 0.25,
      "orbit_radius": 3.6, "orbit_eccentricity": 0.21, "orbit_omega": 30,
-     "orbit_incl": 7.0, "orbit_node": 48,
      "orbit_speed": 36.3, "phase": 20,
      "spin": 10.0, "tilt": 0.03},
 
     {"name": "Venus", "texture": "venus", "radius": 0.40,
-     "orbit_radius": 5.2, "orbit_eccentricity": 0.03, "orbit_omega": 100,
-     "orbit_incl": 3.4, "orbit_node": 76,
+     "orbit_radius": 5.4, "orbit_eccentricity": 0.02, "orbit_omega": 100,
      "orbit_speed": 20.9, "phase": 110,
      "spin": 6.0, "tilt": 177.0,
      "halo": (1.0, 0.80, 0.45, 0.55)},
 
     {"name": "Earth", "texture": "earth", "radius": 0.45,
-     "orbit_radius": 6.8, "orbit_eccentricity": 0.05, "orbit_omega": 170,
-     "orbit_incl": 0, "orbit_node": 0,
+     "orbit_radius": 7.5, "orbit_eccentricity": 0.03, "orbit_omega": 170,
      "orbit_speed": 14.0, "phase": 200,
      "spin": 90.0, "tilt": 23.4, "clouds": True,
      "halo": (0.35, 0.60, 1.0, 0.85),
      "moon": {"radius": 0.13, "dist": 0.95, "speed": 110.0}},
 
     {"name": "Mars", "texture": "mars", "radius": 0.35,
-     "orbit_radius": 9.2, "orbit_eccentricity": 0.09, "orbit_omega": 250,
-     "orbit_incl": 1.85, "orbit_node": 49,
+     "orbit_radius": 9.9, "orbit_eccentricity": 0.06, "orbit_omega": 250,
      "orbit_speed": 9.5, "phase": 300,
      "spin": 85.0, "tilt": 25.2,
      "halo": (1.0, 0.55, 0.35, 0.25)},
 
     {"name": "Jupiter", "texture": "jupiter", "radius": 0.95,
      "orbit_radius": 14.5, "orbit_eccentricity": 0.05, "orbit_omega": 40,
-     "orbit_incl": 1.3, "orbit_node": 100,
      "orbit_speed": 4.5, "phase": 60,
      "spin": 180.0, "tilt": 3.1},
 
     {"name": "Saturn", "texture": "saturn", "radius": 0.80,
-     "orbit_radius": 18.0, "orbit_eccentricity": 0.06, "orbit_omega": 320,
-     "orbit_incl": 2.5, "orbit_node": 113,
+     "orbit_radius": 19.5, "orbit_eccentricity": 0.05, "orbit_omega": 320,
      "orbit_speed": 3.5, "phase": 250,
      "spin": 170.0, "tilt": 26.7,
      "rings": {"kind": "saturn", "inner": 1.25, "outer": 2.3}},
 
     {"name": "Uranus", "texture": "uranus", "radius": 0.60,
-     "orbit_radius": 21.5, "orbit_eccentricity": 0.05, "orbit_omega": 200,
-     "orbit_incl": 0.77, "orbit_node": 74,
+     "orbit_radius": 25.0, "orbit_eccentricity": 0.03, "orbit_omega": 200,
      "orbit_speed": 2.9, "phase": 150,
      "spin": 110.0, "tilt": 97.8,
      "halo": (0.50, 0.90, 0.95, 0.35),
      "rings": {"kind": "uranus", "inner": 1.5, "outer": 2.1}},
 
     {"name": "Neptune", "texture": "neptune", "radius": 0.60,
-     "orbit_radius": 24.5, "orbit_eccentricity": 0.02, "orbit_omega": 120,
-     "orbit_incl": 1.77, "orbit_node": 132,
+     "orbit_radius": 28.5, "orbit_eccentricity": 0.01, "orbit_omega": 120,
      "orbit_speed": 2.5, "phase": 330,
      "spin": 120.0, "tilt": 28.3,
      "halo": (0.30, 0.50, 1.0, 0.50)},
@@ -305,24 +292,7 @@ PLANETS = [
 # =====================================================================
 
 _sphere_list = None
-_wire_list = None      # hình cầu dạng lưới (khung mô hình hóa)
-_solid_list = None     # hình cầu đặc tô màu nền, để che các đường lưới phía sau
-_wire_bg = (0.008, 0.012, 0.035)   # màu nền hiện tại (main.py cập nhật mỗi khung hình)
 _tex = {}
-
-# Màu đường lưới của từng thiên thể ở chế độ khung mô hình
-WIRE_COLORS = {
-    "Sun": (1.0, 0.80, 0.20),
-    "Moon": (0.80, 0.80, 0.80),
-    "Mercury": (0.75, 0.70, 0.65),
-    "Venus": (1.00, 0.80, 0.45),
-    "Earth": (0.30, 0.65, 1.00),
-    "Mars": (1.00, 0.45, 0.25),
-    "Jupiter": (0.95, 0.75, 0.50),
-    "Saturn": (0.95, 0.88, 0.55),
-    "Uranus": (0.55, 0.95, 0.95),
-    "Neptune": (0.35, 0.50, 1.00),
-}
 _glow_tex = None
 _halo_tex = None
 
@@ -414,7 +384,7 @@ def _build_rings(kind, inner, outer, rng, steps=200, seg=128):
 
 def init_planets():
     """Goi 1 lan SAU khi da co OpenGL context."""
-    global _sphere_list, _wire_list, _solid_list, _glow_tex, _halo_tex
+    global _sphere_list, _glow_tex, _halo_tex
 
     rng = np.random.default_rng(7)
 
@@ -426,38 +396,6 @@ def init_planets():
     gluSphere(q, 1.0, 96, 64)
     glEndList()
     gluDeleteQuadric(q)
-
-    # Hình cầu dạng lưới kinh tuyến - vĩ tuyến (cực của hình cầu nằm trên trục z)
-    n_lat, n_lon, seg = 12, 20, 48
-    _wire_list = glGenLists(1)
-    glNewList(_wire_list, GL_COMPILE)
-    for i in range(1, n_lat):                     # vĩ tuyến
-        lat = math.radians(-90.0 + 180.0 * i / n_lat)
-        glBegin(GL_LINE_LOOP)
-        for j in range(seg):
-            a = 2.0 * math.pi * j / seg
-            glVertex3f(math.cos(lat) * math.cos(a),
-                       math.cos(lat) * math.sin(a),
-                       math.sin(lat))
-        glEnd()
-    for k in range(n_lon):                        # kinh tuyến (nửa vòng, từ cực đến cực)
-        lon = 2.0 * math.pi * k / n_lon
-        glBegin(GL_LINE_STRIP)
-        for j in range(seg + 1):
-            t = -math.pi / 2 + math.pi * j / seg
-            glVertex3f(math.cos(t) * math.cos(lon),
-                       math.cos(t) * math.sin(lon),
-                       math.sin(t))
-        glEnd()
-    glEndList()
-
-    # Hình cầu đặc nhỏ hơn một chút: tô màu nền để che nửa lưới phía sau
-    qs = gluNewQuadric()
-    _solid_list = glGenLists(1)
-    glNewList(_solid_list, GL_COMPILE)
-    gluSphere(qs, 0.99, 48, 32)
-    glEndList()
-    gluDeleteQuadric(qs)
 
     for key, fn in _BUILDERS.items():
         _tex[key] = _upload(fn(rng))
@@ -522,66 +460,7 @@ def _draw_billboard(tex, half, color):
     glPopMatrix()
 
 
-def set_wire_background(rgb):
-    """main.py gọi mỗi khung hình để khung mô hình biết màu nền hiện tại."""
-    global _wire_bg
-    _wire_bg = tuple(rgb)
-
-
-def _line_color(color):
-    # Nền sáng: làm đậm màu đường lưới để vẫn nhìn rõ
-    if sum(_wire_bg) > 2.0:
-        return tuple(c * 0.55 for c in color)
-    return tuple(color)
-
-
-def _wire_sphere(radius, color, spin=0.0):
-    """Hình cầu dạng khung lưới, chỉ thấy nửa lưới phía trước (không texture, không ánh sáng)."""
-    glDisable(GL_LIGHTING)
-    glDisable(GL_TEXTURE_2D)
-    glPushMatrix()
-    glScalef(radius, radius, radius)
-
-    # 1) Hình cầu đặc màu nền: che các đường lưới nằm phía sau
-    glColor3f(*_wire_bg)
-    glCallList(_solid_list)
-
-    # 2) Các đường kinh tuyến, vĩ tuyến (quay theo spin)
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-    glEnable(GL_LINE_SMOOTH)
-    glLineWidth(1.0)
-    glColor4f(*_line_color(color), 1.0)
-    glRotatef(spin, 0, 0, 1)
-    glCallList(_wire_list)
-    glDisable(GL_BLEND)
-    glPopMatrix()
-
-
-def _wire_rings(planet, color, segments=96):
-    """Vành đai ở chế độ khung: hai đường tròn trong và ngoài."""
-    rg = planet["rings"]
-    s = planet["radius"]
-    glDisable(GL_LIGHTING)
-    glDisable(GL_TEXTURE_2D)
-    glColor3f(*_line_color(color))
-    for rr in (rg["inner"], rg["outer"]):
-        glBegin(GL_LINE_LOOP)
-        for j in range(segments):
-            a = 2.0 * math.pi * j / segments
-            glVertex3f(rr * s * math.cos(a), rr * s * math.sin(a), 0.0)
-        glEnd()
-
-
-def draw_sun(t, wireframe=False):
-    if wireframe:
-        glPushMatrix()
-        glRotatef(-90, 1, 0, 0)
-        _wire_sphere(1.5, WIRE_COLORS["Sun"], t * 4.0)
-        glPopMatrix()
-        glEnable(GL_LIGHTING)
-        return
-
+def draw_sun(t):
     glDisable(GL_LIGHTING)
     glPushMatrix()
     glRotatef(-90, 1, 0, 0)
@@ -591,37 +470,14 @@ def draw_sun(t, wireframe=False):
     _draw_billboard(_glow_tex, 5.0, (1.0, 0.62, 0.20, 0.90))
     _draw_billboard(_glow_tex, 10.0, (1.0, 0.40, 0.10, 0.28))
     glEnable(GL_LIGHTING)
-def _wire_center_dot(color):
-    """Chấm tròn đánh dấu tâm hành tinh ở chế độ khung (vẽ xuyên qua hình cầu).
-    Gồm viền màu hành tinh ở ngoài và lõi trắng/đen ở trong cho dễ nhìn."""
-    core = (1.0, 1.0, 1.0) if sum(_wire_bg) <= 2.0 else (0.0, 0.0, 0.0)
-    glDisable(GL_LIGHTING)
-    glDisable(GL_TEXTURE_2D)
-    glDisable(GL_DEPTH_TEST)
-    glEnable(GL_POINT_SMOOTH)
-    glPointSize(18.0)
-    glColor3f(*color)
-    glBegin(GL_POINTS)
-    glVertex3f(0.0, 0.0, 0.0)
-    glEnd()
-    glPointSize(10.0)
-    glColor3f(*core)
-    glBegin(GL_POINTS)
-    glVertex3f(0.0, 0.0, 0.0)
-    glEnd()
-    glPointSize(1.0)
-    glEnable(GL_DEPTH_TEST)
 
 
-def _draw_moon(m, t, wireframe=False):
+def _draw_moon(m, t):
     a = math.radians(t * m["speed"])
     glPushMatrix()
     glTranslatef(m["dist"] * math.cos(a), 0.0, m["dist"] * math.sin(a))
     glRotatef(-90, 1, 0, 0)
-    if wireframe:
-        _wire_sphere(m["radius"], WIRE_COLORS["Moon"], math.degrees(a) + 180.0)
-    else:
-        _textured_sphere(m["tex"], m["radius"], math.degrees(a) + 180.0)
+    _textured_sphere(m["tex"], m["radius"], math.degrees(a) + 180.0)
     glPopMatrix()
 
 
@@ -641,8 +497,8 @@ def _draw_rings(planet):
 def planet_position(planet, t):
     """Toạ độ (x, y, z) của tâm hành tinh tại thời điểm mô phỏng t.
 
-    Dùng chung cho vẽ hành tinh, camera bám theo và hiển thị toạ độ nên
-    mọi nơi luôn cho cùng một vị trí.
+    Dùng chung cho vẽ hành tinh và camera bám theo nên luôn cho cùng một vị trí.
+    Quỹ đạo nằm trên mặt phẳng XZ (y = 0).
     """
     ang = math.radians(planet["phase"] + t * planet["orbit_speed"])
     return orbit_position(
@@ -650,12 +506,10 @@ def planet_position(planet, t):
         planet["orbit_eccentricity"],
         ang,
         math.radians(planet.get("orbit_omega", 0.0)),
-        math.radians(planet.get("orbit_incl", 0.0) * INCL_SCALE),
-        math.radians(planet.get("orbit_node", 0.0)),
     )
 
 
-def draw_planet(planet, t, wireframe=False):
+def draw_planet(planet, t):
     x, y, z = planet_position(planet, t)
     r = planet["radius"]
     spin = t * planet["spin"]
@@ -664,21 +518,10 @@ def draw_planet(planet, t, wireframe=False):
     glTranslatef(x, y, z)
 
     if planet.get("moon"):
-        _draw_moon(planet["moon"], t, wireframe)
+        _draw_moon(planet["moon"], t)
 
     glRotatef(planet["tilt"], 0, 0, 1)   # nghieng truc
     glRotatef(-90, 1, 0, 0)              # cuc cua quadric -> truc Y
-
-    if wireframe:
-        # Khung mô hình: hành tinh = hình cầu lưới, vành đai = 2 đường tròn
-        color = WIRE_COLORS[planet["name"]]
-        _wire_sphere(r, color, spin)
-        
-        if planet.get("rings"):
-            _wire_rings(planet, color)
-        glEnable(GL_LIGHTING)
-        glPopMatrix()
-        return
 
     _textured_sphere(planet["tex"], r, spin)
 
