@@ -17,23 +17,41 @@ def solve_kepler(mean_anomaly, eccentricity):
     return E
 
 
-def _ellipse_point(a, e, E, omega=0.0):
-    """Điểm trên elip (góc lệch tâm E), Mặt Trời ở tiêu điểm, xoay hướng cận nhật một góc omega."""
+def _ellipse_point(a, e, E, omega=0.0, incl=0.0, node=0.0):
+    """Điểm (x, y, z) trên elip theo góc lệch tâm E; Mặt Trời ở tiêu điểm (gốc toạ độ).
+
+    omega: xoay hướng cận nhật trong mặt phẳng quỹ đạo (radian)
+    incl : độ nghiêng của mặt phẳng quỹ đạo so với mặt phẳng XZ (radian)
+    node : hướng đường giao (nút lên) giữa hai mặt phẳng (radian)
+    """
     b = a * math.sqrt(1.0 - e * e)
-    x = a * (math.cos(E) - e)
-    z = b * math.sin(E)
+    px = a * (math.cos(E) - e)
+    pz = b * math.sin(E)
     c, s = math.cos(omega), math.sin(omega)
-    return x * c - z * s, x * s + z * c
+    x, z = px * c - pz * s, px * s + pz * c
+
+    if incl == 0.0:
+        return x, 0.0, z
+
+    # Quay quanh trục n = (cos node, 0, sin node) một góc incl (công thức Rodrigues)
+    nx, nz = math.cos(node), math.sin(node)
+    ci, si = math.cos(incl), math.sin(incl)
+    d = nx * x + nz * z
+    return (x * ci + nx * d * (1.0 - ci),
+            (nz * x - nx * z) * si,
+            z * ci + nz * d * (1.0 - ci))
 
 
-def orbit_position(semi_major_axis, eccentricity, mean_anomaly, omega=0.0):
-    """Vị trí hành tinh theo định luật Kepler: nhanh ở cận nhật, chậm ở viễn nhật."""
+def orbit_position(semi_major_axis, eccentricity, mean_anomaly,
+                   omega=0.0, incl=0.0, node=0.0):
+    """Vị trí (x, y, z) hành tinh theo định luật Kepler: nhanh ở cận nhật, chậm ở viễn nhật."""
     E = solve_kepler(mean_anomaly, eccentricity)
-    return _ellipse_point(semi_major_axis, eccentricity, E, omega)
+    return _ellipse_point(semi_major_axis, eccentricity, E, omega, incl, node)
 
 
-def draw_orbit(semi_major_axis, eccentricity=0.0, omega=0.0, segments=240):
-    """Vẽ quỹ đạo elip trên mặt phẳng XZ."""
+def draw_orbit(semi_major_axis, eccentricity=0.0, omega=0.0,
+               incl=0.0, node=0.0, segments=240):
+    """Vẽ quỹ đạo elip (có thể nghiêng so với mặt phẳng XZ)."""
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glEnable(GL_LINE_SMOOTH)
@@ -42,8 +60,8 @@ def draw_orbit(semi_major_axis, eccentricity=0.0, omega=0.0, segments=240):
     glBegin(GL_LINE_LOOP)
     for i in range(segments):
         E = 2.0 * math.pi * i / segments
-        x, z = _ellipse_point(semi_major_axis, eccentricity, E, omega)
-        glVertex3f(x, 0.0, z)
+        x, y, z = _ellipse_point(semi_major_axis, eccentricity, E, omega, incl, node)
+        glVertex3f(x, y, z)
     glEnd()
 
     glDisable(GL_BLEND)

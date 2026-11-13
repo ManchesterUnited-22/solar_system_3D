@@ -6,10 +6,12 @@ from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective, gluLookAt, gluProject
 
 from planet import (PLANETS, init_planets, draw_sun, draw_planet,
-                    set_wire_background, planet_position)
+                    set_wire_background, planet_position, WIRE_COLORS)
 from orbit import draw_orbit, draw_asteroid_belt
 from axes import draw_axes, draw_coord_path, coord_end_points
 import properties_panel as ui
+from planet import (PLANETS, init_planets, draw_sun, draw_planet,
+                    set_wire_background, planet_position, WIRE_COLORS, INCL_SCALE)
 
 WIDTH, HEIGHT = 1200, 800
 
@@ -408,6 +410,8 @@ def main():
                         planet["orbit_radius"],
                         planet["orbit_eccentricity"],
                         math.radians(planet.get("orbit_omega", 0.0)),
+                        math.radians(planet.get("orbit_incl", 0.0) * INCL_SCALE),
+                        math.radians(planet.get("orbit_node", 0.0)),
                     )
             draw_asteroid_belt(sim_time)
         glEnable(GL_LIGHTING)
@@ -430,6 +434,16 @@ def main():
         # Bảng Properties (vẽ đè lên trên cùng)
         win_w, win_h = glfw.get_window_size(window)
         ui.draw_panel(ui_tab, win_w, win_h)
+                # Khung mô hình hóa: chấm tâm + chữ cái in hoa (A, B, C...) cho từng hành tinh
+        if wireframe:
+            markers = []
+            for i, planet in enumerate(PLANETS):
+                pt = project_to_window(window, planet_position(planet, sim_time))
+                if pt:
+                    markers.append((pt[0], pt[1], chr(ord("A") + i),
+                                    WIRE_COLORS[planet["name"]]))
+            core = (0.0, 0.0, 0.0) if white_bg else (1.0, 1.0, 1.0)
+            ui.draw_center_markers(markers, win_w, win_h, core)
         if focus is not None:
             ui.draw_info_panel(PLANETS[focus]["name"].upper(), focus_pos,
                                paused, ui_tab, win_w, win_h)

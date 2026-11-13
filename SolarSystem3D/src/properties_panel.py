@@ -5,6 +5,7 @@ Gồm 2 tab:
     1 = HIDE AXES : không hiện trục, hiện quỹ đạo và vành đai thiên thạch
 Toạ độ trong file này tính theo pixel cửa sổ, gốc ở góc trái trên.
 """
+import math
 from OpenGL.GL import *
 
 PANEL_X, PANEL_Y = 12, 12
@@ -280,15 +281,15 @@ def draw_info_panel(name, pos, paused, tab, win_w, win_h):
     _end_2d()
 
 
-def draw_value_tags(tags, win_w, win_h):
+def draw_value_tags(tags, win_w, win_h, scale=SCALE):
     """Nhãn nhỏ cạnh một điểm trên màn hình. tags: [(x, y, chữ, màu)], x/y theo
     toạ độ cửa sổ (gốc ở góc trái trên), là vị trí điểm cần gắn nhãn.
-    Nhãn chồng lên nhau (đầu đoạn ở sát nhau) được đẩy xuống để vẫn đọc được."""
-    h = 7 * SCALE + 8
+    scale: cỡ chữ (mặc định SCALE). Nhãn chồng lên nhau được đẩy xuống để vẫn đọc được."""
+    h = 7 * scale + 8
     placed = []                                  # các hình chữ nhật đã đặt (x, y, w, h)
     laid_out = []
     for x, y, text, color in tags:
-        w = _text_width(text) + 10
+        w = _text_width(text, scale) + 10
         tx, ty = x + 12, y - h - 6               # chếch lên phía trên bên phải điểm
         moved = True
         while moved:                             # đẩy xuống tới khi hết đè nhãn khác
@@ -302,7 +303,32 @@ def draw_value_tags(tags, win_w, win_h):
 
     _begin_2d(win_w, win_h)
     for tx, ty, w, text, color in laid_out:
-        _rect(tx, ty, w, h, (0.05, 0.06, 0.09), 0.85)
-        _rect(tx, ty, 3, h, color, 1.0)          # vạch màu trục bên trái
-        _text(tx + 7, ty + 4, text, color)
+        _rect(tx, ty, w, h, (0.05, 0.06, 0.09), 0.92)
+        _rect(tx, ty, 3, h, color, 1.0)          # vạch màu bên trái
+        _text(tx + 7, ty + 4, text, color, scale)
+    _end_2d()
+
+
+def _disc(cx, cy, r, color, segments=28):
+    """Hình tròn đặc (toạ độ cửa sổ), dùng GL_TRIANGLE_FAN nên luôn tròn."""
+    glColor3f(color[0], color[1], color[2])
+    glBegin(GL_TRIANGLE_FAN)
+    glVertex2f(cx, cy)
+    for i in range(segments + 1):
+        a = 2.0 * math.pi * i / segments
+        glVertex2f(cx + r * math.cos(a), cy + r * math.sin(a))
+    glEnd()
+
+
+def draw_center_markers(markers, win_w, win_h, core=(1.0, 1.0, 1.0), scale=3):
+    """Đánh dấu tâm hành tinh: chấm tròn (viền màu + lõi) và chữ cái cạnh đó.
+    markers: [(x, y, chữ, màu)], x/y theo toạ độ cửa sổ (gốc ở góc trái trên)."""
+    _begin_2d(win_w, win_h)
+    for x, y, text, color in markers:
+        _disc(x, y, 8.5, color)
+        _disc(x, y, 4.5, core)
+        tx, ty = x + 13, y + 5               # chữ nằm chếch xuống dưới bên phải
+        w = _text_width(text, scale)
+        _rect(tx - 4, ty - 3, w + 8, 7 * scale + 6, (0.05, 0.06, 0.09), 0.85)
+        _text(tx, ty, text, color, scale)
     _end_2d()

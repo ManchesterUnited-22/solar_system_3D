@@ -234,27 +234,25 @@ _BUILDERS = {
     "mars": tex_mars, "jupiter": tex_jupiter, "saturn": tex_saturn,
     "uranus": tex_uranus, "neptune": tex_neptune,
 }
-
-
-# =====================================================================
-#  DU LIEU HANH TINH
-#  tilt: do nghieng truc | spin: do/giay | orbit_speed: do/giay
-# =====================================================================
-
+# Hệ số độ nghiêng quỹ đạo: 0 = phẳng hẳn, 1 = đúng số liệu thật, 2-3 = phóng đại
+INCL_SCALE = 1.0
 PLANETS = [
     {"name": "Mercury", "texture": "mercury", "radius": 0.25,
      "orbit_radius": 3.6, "orbit_eccentricity": 0.40, "orbit_omega": 30,
+     "orbit_incl": 16, "orbit_node": 48,
      "orbit_speed": 36.3, "phase": 20,
      "spin": 10.0, "tilt": 0.03},
 
     {"name": "Venus", "texture": "venus", "radius": 0.40,
      "orbit_radius": 5.2, "orbit_eccentricity": 0.12, "orbit_omega": 100,
+     "orbit_incl": 8, "orbit_node": 76,
      "orbit_speed": 20.9, "phase": 110,
      "spin": 6.0, "tilt": 177.0,
      "halo": (1.0, 0.80, 0.45, 0.55)},
 
     {"name": "Earth", "texture": "earth", "radius": 0.45,
      "orbit_radius": 6.8, "orbit_eccentricity": 0.20, "orbit_omega": 170,
+     "orbit_incl": 0, "orbit_node": 0,
      "orbit_speed": 14.0, "phase": 200,
      "spin": 90.0, "tilt": 23.4, "clouds": True,
      "halo": (0.35, 0.60, 1.0, 0.85),
@@ -262,23 +260,27 @@ PLANETS = [
 
     {"name": "Mars", "texture": "mars", "radius": 0.35,
      "orbit_radius": 8.8, "orbit_eccentricity": 0.25, "orbit_omega": 250,
+     "orbit_incl": 6, "orbit_node": 49,
      "orbit_speed": 9.5, "phase": 300,
      "spin": 85.0, "tilt": 25.2,
      "halo": (1.0, 0.55, 0.35, 0.25)},
 
     {"name": "Jupiter", "texture": "jupiter", "radius": 0.95,
      "orbit_radius": 14.5, "orbit_eccentricity": 0.15, "orbit_omega": 40,
+     "orbit_incl": 5, "orbit_node": 100,
      "orbit_speed": 4.5, "phase": 60,
      "spin": 180.0, "tilt": 3.1},
 
     {"name": "Saturn", "texture": "saturn", "radius": 0.80,
      "orbit_radius": 17.0, "orbit_eccentricity": 0.17, "orbit_omega": 320,
+     "orbit_incl": 7, "orbit_node": 113,
      "orbit_speed": 3.5, "phase": 250,
      "spin": 170.0, "tilt": 26.7,
      "rings": {"kind": "saturn", "inner": 1.25, "outer": 2.3}},
 
     {"name": "Uranus", "texture": "uranus", "radius": 0.60,
      "orbit_radius": 19.5, "orbit_eccentricity": 0.13, "orbit_omega": 200,
+     "orbit_incl": 5, "orbit_node": 74,
      "orbit_speed": 2.9, "phase": 150,
      "spin": 110.0, "tilt": 97.8,
      "halo": (0.50, 0.90, 0.95, 0.35),
@@ -286,6 +288,7 @@ PLANETS = [
 
     {"name": "Neptune", "texture": "neptune", "radius": 0.60,
      "orbit_radius": 21.5, "orbit_eccentricity": 0.09, "orbit_omega": 120,
+     "orbit_incl": 6, "orbit_node": 132,
      "orbit_speed": 2.5, "phase": 330,
      "spin": 120.0, "tilt": 28.3,
      "halo": (0.30, 0.50, 1.0, 0.50)},
@@ -583,6 +586,26 @@ def draw_sun(t, wireframe=False):
     _draw_billboard(_glow_tex, 5.0, (1.0, 0.62, 0.20, 0.90))
     _draw_billboard(_glow_tex, 10.0, (1.0, 0.40, 0.10, 0.28))
     glEnable(GL_LIGHTING)
+def _wire_center_dot(color):
+    """Chấm tròn đánh dấu tâm hành tinh ở chế độ khung (vẽ xuyên qua hình cầu).
+    Gồm viền màu hành tinh ở ngoài và lõi trắng/đen ở trong cho dễ nhìn."""
+    core = (1.0, 1.0, 1.0) if sum(_wire_bg) <= 2.0 else (0.0, 0.0, 0.0)
+    glDisable(GL_LIGHTING)
+    glDisable(GL_TEXTURE_2D)
+    glDisable(GL_DEPTH_TEST)
+    glEnable(GL_POINT_SMOOTH)
+    glPointSize(18.0)
+    glColor3f(*color)
+    glBegin(GL_POINTS)
+    glVertex3f(0.0, 0.0, 0.0)
+    glEnd()
+    glPointSize(10.0)
+    glColor3f(*core)
+    glBegin(GL_POINTS)
+    glVertex3f(0.0, 0.0, 0.0)
+    glEnd()
+    glPointSize(1.0)
+    glEnable(GL_DEPTH_TEST)
 
 
 def _draw_moon(m, t, wireframe=False):
@@ -614,25 +637,26 @@ def planet_position(planet, t):
     """Toạ độ (x, y, z) của tâm hành tinh tại thời điểm mô phỏng t.
 
     Dùng chung cho vẽ hành tinh, camera bám theo và hiển thị toạ độ nên
-    mọi nơi luôn cho cùng một vị trí. Hành tinh chuyển động trên mặt phẳng XZ.
+    mọi nơi luôn cho cùng một vị trí.
     """
     ang = math.radians(planet["phase"] + t * planet["orbit_speed"])
-    x, z = orbit_position(
+    return orbit_position(
         planet["orbit_radius"],
         planet["orbit_eccentricity"],
         ang,
         math.radians(planet.get("orbit_omega", 0.0)),
+        math.radians(planet.get("orbit_incl", 0.0) * INCL_SCALE),
+        math.radians(planet.get("orbit_node", 0.0)),
     )
-    return x, 0.0, z
 
 
 def draw_planet(planet, t, wireframe=False):
-    x, _, z = planet_position(planet, t)
+    x, y, z = planet_position(planet, t)
     r = planet["radius"]
     spin = t * planet["spin"]
 
     glPushMatrix()
-    glTranslatef(x, 0.0, z)
+    glTranslatef(x, y, z)
 
     if planet.get("moon"):
         _draw_moon(planet["moon"], t, wireframe)
@@ -644,6 +668,7 @@ def draw_planet(planet, t, wireframe=False):
         # Khung mô hình: hành tinh = hình cầu lưới, vành đai = 2 đường tròn
         color = WIRE_COLORS[planet["name"]]
         _wire_sphere(r, color, spin)
+        
         if planet.get("rings"):
             _wire_rings(planet, color)
         glEnable(GL_LIGHTING)
