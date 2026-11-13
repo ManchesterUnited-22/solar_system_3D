@@ -68,6 +68,18 @@ FONT = {
     "Z": ["#####", "    #", "   # ", "  #  ", " #   ", "#    ", "#####"],
     ":": ["     ", "  #  ", "  #  ", "     ", "  #  ", "  #  ", "     "],
     "+": ["     ", "  #  ", "  #  ", "#####", "  #  ", "  #  ", "     "],
+    "-": ["     ", "     ", "     ", "#####", "     ", "     ", "     "],
+    ".": ["     ", "     ", "     ", "     ", "     ", " ##  ", " ##  "],
+    "0": [" ### ", "#   #", "#  ##", "# # #", "##  #", "#   #", " ### "],
+    "1": ["  #  ", " ##  ", "  #  ", "  #  ", "  #  ", "  #  ", " ### "],
+    "2": [" ### ", "#   #", "    #", "   # ", "  #  ", " #   ", "#####"],
+    "3": ["#### ", "    #", "    #", " ### ", "    #", "    #", "#### "],
+    "4": ["   # ", "  ## ", " # # ", "#  # ", "#####", "   # ", "   # "],
+    "5": ["#####", "#    ", "#### ", "    #", "    #", "#   #", " ### "],
+    "6": ["  ## ", " #   ", "#    ", "#### ", "#   #", "#   #", " ### "],
+    "7": ["#####", "    #", "   # ", "  #  ", " #   ", " #   ", " #   "],
+    "8": [" ### ", "#   #", "#   #", " ### ", "#   #", "#   #", " ### "],
+    "9": [" ### ", "#   #", "#   #", " ####", "    #", "   # ", " ##  "],
     " ": ["     "] * 7,
 }
 
@@ -125,8 +137,7 @@ def hit_test(x, y, tab):
     return -1
 
 
-def draw_panel(tab, win_w, win_h):
-    """Vẽ bảng Properties lên trên cùng khung hình (gọi sau khi vẽ xong cảnh 3D)."""
+def _begin_2d(win_w, win_h):
     glMatrixMode(GL_PROJECTION)
     glPushMatrix()
     glLoadIdentity()
@@ -141,6 +152,20 @@ def draw_panel(tab, win_w, win_h):
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
+
+def _end_2d():
+    glDisable(GL_BLEND)
+    glEnable(GL_DEPTH_TEST)
+
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glPopMatrix()
+
+
+def draw_panel(tab, win_w, win_h):
+    """Vẽ bảng Properties lên trên cùng khung hình (gọi sau khi vẽ xong cảnh 3D)."""
+    _begin_2d(win_w, win_h)
     px, py, pw, ph = panel_rect(tab)
 
     # Nền + viền
@@ -184,10 +209,100 @@ def draw_panel(tab, win_w, win_h):
         _text(tx, cy, text, color)
         cy += LINE_H
 
-    glDisable(GL_BLEND)
-    glEnable(GL_DEPTH_TEST)
+    _end_2d()
 
-    glMatrixMode(GL_PROJECTION)
-    glPopMatrix()
-    glMatrixMode(GL_MODELVIEW)
-    glPopMatrix()
+# ---------------------------------------------------------------------
+#  Bảng thông tin hành tinh đang được chọn (nằm ngay dưới bảng Properties)
+# ---------------------------------------------------------------------
+INFO_GAP = 10
+_COORD_ROWS = (("X", RED), ("Y", GREEN), ("Z", BLUE))
+
+
+def _info_lines(paused):
+    """Số dòng nội dung: đang chạy -> 3 dòng gợi ý; đang dừng -> X, Y, Z + 2 dòng phím."""
+    return 5 if paused else 3
+
+
+def info_panel_rect(tab, paused):
+    _, py, _, ph = panel_rect(tab)
+    h = TITLE_H + PAD + _info_lines(paused) * LINE_H + PAD
+    return PANEL_X, py + ph + INFO_GAP, PANEL_W, h
+
+
+def hit_test_info(x, y, tab, paused):
+    """True nếu con trỏ nằm trong bảng thông tin (để không xoay camera / bỏ chọn)."""
+    px, py, pw, ph = info_panel_rect(tab, paused)
+    return px <= x <= px + pw and py <= y <= py + ph
+
+
+def _fmt(v):
+    return "%+.2f" % (0.0 if abs(v) < 0.005 else v)
+
+
+def draw_info_panel(name, pos, paused, tab, win_w, win_h):
+    """Tên hành tinh; khi đang dừng (PAUSED) hiện toạ độ x, y, z hiện tại."""
+    _begin_2d(win_w, win_h)
+    px, py, pw, ph = info_panel_rect(tab, paused)
+
+    _rect(px, py, pw, ph, (0.05, 0.06, 0.09), 0.88)
+    _rect(px, py, pw, TITLE_H, (0.14, 0.16, 0.22), 0.95)
+    glColor4f(0.35, 0.40, 0.55, 1.0)
+    glLineWidth(1.0)
+    glBegin(GL_LINE_LOOP)
+    glVertex2f(px, py)
+    glVertex2f(px + pw, py)
+    glVertex2f(px + pw, py + ph)
+    glVertex2f(px, py + ph)
+    glEnd()
+
+    ty = py + (TITLE_H - 7 * SCALE) / 2
+    _text(px + PAD, ty, name, WHITE)
+    status = "PAUSED" if paused else "LIVE"
+    _text(px + pw - PAD - _text_width(status), ty, status,
+          (1.0, 0.82, 0.35) if paused else GRAY)
+
+    cy = py + TITLE_H + PAD
+    if paused:
+        for (axis, color), v in zip(_COORD_ROWS, pos):
+            _rect(px + PAD, cy + 5, 22, 4, color, 1.0)
+            _text(px + PAD + 32, cy, "%s: %s" % (axis, _fmt(v)), WHITE)
+            cy += LINE_H
+        _text(px + PAD, cy, "SPACE: RESUME", GRAY)
+        cy += LINE_H
+        _text(px + PAD, cy, "ESC: BACK", GRAY)
+    else:
+        _text(px + PAD, cy, "PAUSE (SPACE) TO", GRAY)
+        cy += LINE_H
+        _text(px + PAD, cy, "READ COORDINATES", GRAY)
+        cy += LINE_H
+        _text(px + PAD, cy, "ESC: BACK", GRAY)
+
+    _end_2d()
+
+
+def draw_value_tags(tags, win_w, win_h):
+    """Nhãn nhỏ cạnh một điểm trên màn hình. tags: [(x, y, chữ, màu)], x/y theo
+    toạ độ cửa sổ (gốc ở góc trái trên), là vị trí điểm cần gắn nhãn.
+    Nhãn chồng lên nhau (đầu đoạn ở sát nhau) được đẩy xuống để vẫn đọc được."""
+    h = 7 * SCALE + 8
+    placed = []                                  # các hình chữ nhật đã đặt (x, y, w, h)
+    laid_out = []
+    for x, y, text, color in tags:
+        w = _text_width(text) + 10
+        tx, ty = x + 12, y - h - 6               # chếch lên phía trên bên phải điểm
+        moved = True
+        while moved:                             # đẩy xuống tới khi hết đè nhãn khác
+            moved = False
+            for ox, oy, ow, oh in placed:
+                if tx < ox + ow and ox < tx + w and ty < oy + oh and oy < ty + h:
+                    ty = oy + oh + 3
+                    moved = True
+        placed.append((tx, ty, w, h))
+        laid_out.append((tx, ty, w, text, color))
+
+    _begin_2d(win_w, win_h)
+    for tx, ty, w, text, color in laid_out:
+        _rect(tx, ty, w, h, (0.05, 0.06, 0.09), 0.85)
+        _rect(tx, ty, 3, h, color, 1.0)          # vạch màu trục bên trái
+        _text(tx + 7, ty + 4, text, color)
+    _end_2d()

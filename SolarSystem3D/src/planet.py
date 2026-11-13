@@ -610,13 +610,23 @@ def _draw_rings(planet):
     glPopMatrix()
 
 
-def draw_planet(planet, t, wireframe=False):
+def planet_position(planet, t):
+    """Toạ độ (x, y, z) của tâm hành tinh tại thời điểm mô phỏng t.
+
+    Dùng chung cho vẽ hành tinh, camera bám theo và hiển thị toạ độ nên
+    mọi nơi luôn cho cùng một vị trí. Hành tinh chuyển động trên mặt phẳng XZ.
+    """
     ang = math.radians(planet["phase"] + t * planet["orbit_speed"])
     x, z = orbit_position(
         planet["orbit_radius"],
         planet["orbit_eccentricity"],
         ang,
     )
+    return x, 0.0, z
+
+
+def draw_planet(planet, t, wireframe=False):
+    x, _, z = planet_position(planet, t)
     r = planet["radius"]
     spin = t * planet["spin"]
 
