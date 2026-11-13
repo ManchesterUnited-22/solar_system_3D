@@ -5,13 +5,12 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective, gluLookAt, gluProject
 
+import planet as planet_mod          # để đọc/ghi INCL_SCALE khi chạy (phím I)
 from planet import (PLANETS, init_planets, draw_sun, draw_planet,
                     set_wire_background, planet_position, WIRE_COLORS)
 from orbit import draw_orbit, draw_asteroid_belt
 from axes import draw_axes, draw_coord_path, coord_end_points
 import properties_panel as ui
-from planet import (PLANETS, init_planets, draw_sun, draw_planet,
-                    set_wire_background, planet_position, WIRE_COLORS, INCL_SCALE)
 
 WIDTH, HEIGHT = 1200, 800
 
@@ -250,6 +249,16 @@ def key_callback(window, key, scancode, action, mods):
         sim_speed = 1.0
     elif key == glfw.KEY_B and action == glfw.PRESS:
         white_bg = not white_bg
+    elif key == glfw.KEY_I and action == glfw.PRESS:
+        # Đổi độ phóng đại góc nghiêng quỹ đạo: 1 (đúng thật) -> 3 -> 5 -> 1
+        levels = [1.0, 3.0, 5.0]
+        cur = planet_mod.INCL_SCALE
+        if cur in levels:
+            nxt = levels[(levels.index(cur) + 1) % len(levels)]
+        else:
+            nxt = 3.0
+        planet_mod.INCL_SCALE = nxt
+        print("INCL_SCALE =", nxt)
     elif key == glfw.KEY_ESCAPE:
         if focus is not None:
             clear_focus()                    # ESC lần 1: về toàn hệ
@@ -410,7 +419,7 @@ def main():
                         planet["orbit_radius"],
                         planet["orbit_eccentricity"],
                         math.radians(planet.get("orbit_omega", 0.0)),
-                        math.radians(planet.get("orbit_incl", 0.0) * INCL_SCALE),
+                        math.radians(planet.get("orbit_incl", 0.0) * planet_mod.INCL_SCALE),
                         math.radians(planet.get("orbit_node", 0.0)),
                     )
             draw_asteroid_belt(sim_time)
@@ -434,7 +443,8 @@ def main():
         # Bảng Properties (vẽ đè lên trên cùng)
         win_w, win_h = glfw.get_window_size(window)
         ui.draw_panel(ui_tab, win_w, win_h)
-                # Khung mô hình hóa: chấm tâm + chữ cái in hoa (A, B, C...) cho từng hành tinh
+
+        # Khung mô hình hóa: chấm tâm + chữ cái in hoa (A, B, C...) cho từng hành tinh
         if wireframe:
             markers = []
             for i, planet in enumerate(PLANETS):
