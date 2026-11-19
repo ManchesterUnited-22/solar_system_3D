@@ -284,6 +284,17 @@ _BUILDERS.update({
     "jupiter": lambda rng: _ht.load_or_build("jupiter_v1", _ht.jupiter_texture),
     "saturn":  lambda rng: _ht.load_or_build("saturn_v1", _ht.saturn_texture),
 })
+# Texture cai tien (textures_v3.py): may, Mat Trang, Sao Hoa, Mat Troi, Sao Hai Vuong
+import textures_v3 as _t3
+
+_BUILDERS.update({
+    "clouds":   lambda rng: _ht.load_or_build("clouds_v3", _t3.clouds_texture),
+    "moon":     lambda rng: _ht.load_or_build("moon_v3", _t3.moon_texture),
+    "mars":     lambda rng: _ht.load_or_build("mars_v3", _t3.mars_texture),
+    "sun":      lambda rng: _ht.load_or_build("sun_v3", _t3.sun_texture),
+    "sun_flow": lambda rng: _ht.load_or_build("sun_flow_v3", _t3.sun_flow_texture),
+    "neptune":  lambda rng: _ht.load_or_build("neptune_v3", _t3.neptune_texture),
+})
 # Tất cả quỹ đạo nằm trên cùng một mặt phẳng (mặt phẳng hoàng đạo) như thực tế.
 # Khoảng cách và độ lệch tâm được chọn để các hành tinh (kể cả Mặt Trăng, vành đai) không chạm nhau.
 PLANETS = [

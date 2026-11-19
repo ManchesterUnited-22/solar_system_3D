@@ -1184,6 +1184,23 @@ def saturn_texture(out_w=2048, out_h=1024, seed=41):
 
 
 def load_or_build(name, builder, force=False):
+    """Doc texture tu assets/textures/<name>.png, neu chua co thi ve va luu lai (ho tro RGB va RGBA)."""
+    path = os.path.normpath(os.path.join(_CACHE_DIR, name + ".png"))
+    if os.path.exists(path) and not force:
+        try:
+            img = Image.open(path)
+            img = img.convert("RGBA" if img.mode == "RGBA" else "RGB")
+            return np.ascontiguousarray(np.asarray(img, np.float32)[::-1] / 255.0)
+        except Exception:
+            pass
+    arr = builder()
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        top_first = (np.clip(arr[::-1], 0, 1) * 255).astype(np.uint8)
+        Image.fromarray(top_first, "RGBA" if arr.shape[2] == 4 else "RGB").save(path)
+    except Exception:
+        pass
+    return arr
     """Doc texture tu assets/textures/<name>.png, neu chua co thi ve va luu lai."""
     path = os.path.normpath(os.path.join(_CACHE_DIR, name + ".png"))
     if os.path.exists(path) and not force:
