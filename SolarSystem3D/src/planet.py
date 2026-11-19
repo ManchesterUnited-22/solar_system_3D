@@ -126,7 +126,7 @@ def tex_sun_flow(rng):
     fine = _norm(_fbm(rng, 58, 4, 0.48))
     medium = _norm(_fbm(rng, 16, 5, 0.52))
     flow = np.clip(0.68 * fine + 0.32 * medium, 0, 1)
-    alpha = _smoothstep(0.62, 0.94, flow) * 0.42
+    alpha = _smoothstep(0.45, 0.78, flow) * 0.58
     img = np.zeros((TEX_H, TEX_W, 4), np.float32)
     img[..., 0:3] = _lerp((1.0, 0.16, 0.002), (1.0, 0.82, 0.14), flow)
     img[..., 3] = alpha
@@ -184,35 +184,6 @@ def tex_clouds(rng):
     a = _smoothstep(np.quantile(n, 0.55), np.quantile(n, 0.86), n) * 0.85
     img = np.ones((TEX_H, TEX_W, 4))
     img[..., 3] = a
-    return img
-
-
-def tex_earth_lights(rng):
-    img = np.zeros((TEX_H, TEX_W, 4), np.float32)
-    yy, xx = np.mgrid[0:TEX_H, 0:TEX_W]
-
-    city_groups = (
-        (0.24 * TEX_W, 0.58 * TEX_H, 0.10 * TEX_W, 0.16 * TEX_H),
-        (0.34 * TEX_W, 0.62 * TEX_H, 0.055 * TEX_W, 0.08 * TEX_H),
-        (0.54 * TEX_W, 0.53 * TEX_H, 0.10 * TEX_W, 0.10 * TEX_H),
-        (0.68 * TEX_W, 0.54 * TEX_H, 0.07 * TEX_W, 0.08 * TEX_H),
-        (0.79 * TEX_W, 0.58 * TEX_H, 0.08 * TEX_W, 0.08 * TEX_H),
-        (0.50 * TEX_W, 0.69 * TEX_H, 0.06 * TEX_W, 0.10 * TEX_H),
-    )
-
-    for cx, cy, rx, ry in city_groups:
-        dx = (xx - cx) / rx
-        dy = (yy - cy) / ry
-        envelope = np.exp(-(dx * dx + dy * dy) * 1.4)
-        phase = rng.uniform(0.0, math.pi * 2.0)
-        street = (0.5 + 0.5 * np.sin(xx / 7.0 + yy / 11.0 + phase))
-        street *= (0.5 + 0.5 * np.sin(xx / 13.0 - yy / 9.0 - phase))
-        lights = _smoothstep(0.48, 0.82, street) * envelope
-        img[..., 0] = np.maximum(img[..., 0], lights)
-        img[..., 1] = np.maximum(img[..., 1], lights * 0.76)
-        img[..., 2] = np.maximum(img[..., 2], lights * 0.28)
-
-    img[..., 3] = np.clip(img[..., 0] * 1.8, 0, 1)
     return img
 
 
@@ -298,7 +269,6 @@ _BUILDERS = {
     "mars": tex_mars, "jupiter": tex_jupiter, "saturn": tex_saturn,
     "uranus": tex_uranus, "neptune": tex_neptune,
     "sun_flow": tex_sun_flow,
-    "earth_lights": tex_earth_lights,
 }
 
 # Texture VE TAY (hand_textures.py) thay cho noise o cac hanh tinh co be mat dac trung.
@@ -307,6 +277,7 @@ import hand_textures as _ht
 
 _BUILDERS.update({
     "earth":   lambda rng: _ht.load_or_build("earth_day_v1", _ht.earth_texture),
+    "earth_lights": lambda rng: _ht.load_or_build("earth_lights_v1", _ht.earth_lights_texture),
     "moon":    lambda rng: _ht.load_or_build("moon_v1", _ht.moon_texture),
     "mercury": lambda rng: _ht.load_or_build("mercury_v1", _ht.mercury_texture),
     "mars":    lambda rng: _ht.load_or_build("mars_v1", _ht.mars_texture),
@@ -686,6 +657,34 @@ def planet_stats(planet, t):
     v = math.sqrt(SUN_GM * (2.0 / r - 1.0 / a))
     return r / 1e6, v
 
+NIGHT_GAIN = 3.2      # do "bat den": den sang hoan toan khi vao sau ~17 do ke tu ranh gioi ngay/dem
+
+
+def _draw_city_lights(tex, radius, spin):
+    """Den do thi: CHI hien o nua toi cua hanh tinh.
+
+    Dung GL_LIGHT1 chieu tu phia doi dien Mat Troi (huong da dat trong draw_planet), nen do sang
+    theo dinh = cos(goc so voi "nua dem"): bang 0 tai ranh gioi, tang dan vao sau ban dem.
+    Cong vao canh (GL_ONE, GL_ONE) nen khong lam toi mau nen.
+    """
+    if glGetFloatv(GL_LIGHT_MODEL_AMBIENT)[0] > 0.5:      # che do nen trang: khong ve den
+        return
+    glPushAttrib(GL_LIGHTING_BIT | GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT |
+                 GL_DEPTH_BUFFER_BIT | GL_CURRENT_BIT)
+    glEnable(GL_LIGHTING)
+    glDisable(GL_LIGHT0)
+    glEnable(GL_LIGHT1)
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.0, 0.0, 0.0, 1.0))
+    glLightfv(GL_LIGHT1, GL_AMBIENT, (0.0, 0.0, 0.0, 1.0))
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, (NIGHT_GAIN, NIGHT_GAIN, NIGHT_GAIN, 1.0))
+    glLightfv(GL_LIGHT1, GL_SPECULAR, (0.0, 0.0, 0.0, 1.0))
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_ONE, GL_ONE)
+    glDepthMask(GL_FALSE)
+    _textured_sphere(tex, radius, spin)
+    glPopAttrib()
+
+
 def draw_planet(planet, t):
     x, y, z = planet_position(planet, t)
     r = planet["radius"]
@@ -693,6 +692,12 @@ def draw_planet(planet, t):
 
     glPushMatrix()
     glTranslatef(x, y, z)
+
+    if planet.get("lights_tex"):
+        # Huong "doi dien Mat Troi" (Mat Troi o goc toa do). Phai dat ngay luc modelview moi
+        # chi co phep nhin + tinh tien, truoc khi xoay/nghieng hanh tinh.
+        d = math.sqrt(x * x + y * y + z * z) or 1.0
+        glLightfv(GL_LIGHT1, GL_POSITION, (x / d, y / d, z / d, 0.0))
 
     glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (72.0,))
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (0.48, 0.48, 0.52, 1.0))
@@ -714,14 +719,7 @@ def draw_planet(planet, t):
         glDisable(GL_BLEND)
 
     if planet.get("lights_tex"):
-        glDisable(GL_LIGHTING)
-        glEnable(GL_BLEND)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE)
-        glDepthMask(GL_FALSE)
-        _textured_sphere(planet["lights_tex"], r * 1.012, spin)
-        glDepthMask(GL_TRUE)
-        glDisable(GL_BLEND)
-        glEnable(GL_LIGHTING)
+        _draw_city_lights(planet["lights_tex"], r * 1.004, spin)
 
     if planet.get("ring_list"):
         _draw_rings(planet)
