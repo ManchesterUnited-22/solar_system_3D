@@ -120,3 +120,4 @@ def draw_asteroid_belt(t):
     glDisable(GL_POINT_SMOOTH)
     glDisable(GL_BLEND)
     glPointSize(1.0)
+

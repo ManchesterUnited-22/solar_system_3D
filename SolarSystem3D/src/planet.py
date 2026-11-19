@@ -92,10 +92,45 @@ def _craters(img, rng, count, rmin, rmax, dark=0.5):
 # =====================================================================
 
 def tex_sun(rng):
-    a = _norm(_fbm(rng, 6, 6, 0.6))
-    b = _norm(_fbm(rng, 24, 3, 0.5))
-    t = _smoothstep(0.2, 0.85, np.clip(0.65 * a + 0.35 * b, 0, 1))
-    return _lerp((0.90, 0.25, 0.02), (1.0, 0.92, 0.50), t)
+    broad = _norm(_fbm(rng, 5, 6, 0.58))
+    cells = _norm(_fbm(rng, 28, 5, 0.48))
+    fine = _norm(_fbm(rng, 92, 4, 0.45))
+
+    heat = np.clip(0.50 * broad + 0.32 * cells + 0.18 * fine, 0, 1)
+    img = _lerp((0.92, 0.018, 0.002), (1.00, 0.32, 0.008), heat)
+    hot = _smoothstep(0.62, 0.94, cells + fine * 0.28)
+    img = _lerp(img, (1.00, 0.58, 0.055), hot * 0.72)
+    white_hot = _smoothstep(0.82, 0.98, fine * 0.45 + cells * 0.55)
+    img = _lerp(img, (1.00, 0.96, 0.72), white_hot * 0.58)
+
+    yy, xx = np.mgrid[0:TEX_H, 0:TEX_W]
+    for cx, cy, rx, ry in (
+        (0.14 * TEX_W, 0.30 * TEX_H, 9, 4),
+        (0.31 * TEX_W, 0.68 * TEX_H, 8, 5),
+        (0.58 * TEX_W, 0.41 * TEX_H, 11, 5),
+        (0.72 * TEX_W, 0.24 * TEX_H, 7, 4),
+        (0.80 * TEX_W, 0.72 * TEX_H, 12, 6),
+        (0.46 * TEX_W, 0.82 * TEX_H, 6, 4),
+    ):
+        d = ((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2
+        spot = np.exp(-d * 2.1)
+        img = _lerp(img, (1.0, 0.78, 0.12), spot * 0.88)
+
+    grain = _smoothstep(0.88, 0.98, fine)
+    img = _lerp(img, (1.0, 0.62, 0.06), grain * 0.12)
+    return np.clip(img, 0, 1)
+
+
+def tex_sun_flow(rng):
+    """Very subtle transparent convection on the photosphere."""
+    fine = _norm(_fbm(rng, 58, 4, 0.48))
+    medium = _norm(_fbm(rng, 16, 5, 0.52))
+    flow = np.clip(0.68 * fine + 0.32 * medium, 0, 1)
+    alpha = _smoothstep(0.62, 0.94, flow) * 0.42
+    img = np.zeros((TEX_H, TEX_W, 4), np.float32)
+    img[..., 0:3] = _lerp((1.0, 0.16, 0.002), (1.0, 0.82, 0.14), flow)
+    img[..., 3] = alpha
+    return img
 
 
 def tex_mercury(rng):
@@ -149,6 +184,35 @@ def tex_clouds(rng):
     a = _smoothstep(np.quantile(n, 0.55), np.quantile(n, 0.86), n) * 0.85
     img = np.ones((TEX_H, TEX_W, 4))
     img[..., 3] = a
+    return img
+
+
+def tex_earth_lights(rng):
+    img = np.zeros((TEX_H, TEX_W, 4), np.float32)
+    yy, xx = np.mgrid[0:TEX_H, 0:TEX_W]
+
+    city_groups = (
+        (0.24 * TEX_W, 0.58 * TEX_H, 0.10 * TEX_W, 0.16 * TEX_H),
+        (0.34 * TEX_W, 0.62 * TEX_H, 0.055 * TEX_W, 0.08 * TEX_H),
+        (0.54 * TEX_W, 0.53 * TEX_H, 0.10 * TEX_W, 0.10 * TEX_H),
+        (0.68 * TEX_W, 0.54 * TEX_H, 0.07 * TEX_W, 0.08 * TEX_H),
+        (0.79 * TEX_W, 0.58 * TEX_H, 0.08 * TEX_W, 0.08 * TEX_H),
+        (0.50 * TEX_W, 0.69 * TEX_H, 0.06 * TEX_W, 0.10 * TEX_H),
+    )
+
+    for cx, cy, rx, ry in city_groups:
+        dx = (xx - cx) / rx
+        dy = (yy - cy) / ry
+        envelope = np.exp(-(dx * dx + dy * dy) * 1.4)
+        phase = rng.uniform(0.0, math.pi * 2.0)
+        street = (0.5 + 0.5 * np.sin(xx / 7.0 + yy / 11.0 + phase))
+        street *= (0.5 + 0.5 * np.sin(xx / 13.0 - yy / 9.0 - phase))
+        lights = _smoothstep(0.48, 0.82, street) * envelope
+        img[..., 0] = np.maximum(img[..., 0], lights)
+        img[..., 1] = np.maximum(img[..., 1], lights * 0.76)
+        img[..., 2] = np.maximum(img[..., 2], lights * 0.28)
+
+    img[..., 3] = np.clip(img[..., 0] * 1.8, 0, 1)
     return img
 
 
@@ -233,57 +297,72 @@ _BUILDERS = {
     "venus": tex_venus, "earth": tex_earth, "clouds": tex_clouds,
     "mars": tex_mars, "jupiter": tex_jupiter, "saturn": tex_saturn,
     "uranus": tex_uranus, "neptune": tex_neptune,
+    "sun_flow": tex_sun_flow,
+    "earth_lights": tex_earth_lights,
 }
+
+# Texture VE TAY (hand_textures.py) thay cho noise o cac hanh tinh co be mat dac trung.
+# Lan chay dau se ve va luu vao assets/textures/*.png, cac lan sau doc lai rat nhanh.
+import hand_textures as _ht
+
+_BUILDERS.update({
+    "earth":   lambda rng: _ht.load_or_build("earth_day_v1", _ht.earth_texture),
+    "moon":    lambda rng: _ht.load_or_build("moon_v1", _ht.moon_texture),
+    "mercury": lambda rng: _ht.load_or_build("mercury_v1", _ht.mercury_texture),
+    "mars":    lambda rng: _ht.load_or_build("mars_v1", _ht.mars_texture),
+    "jupiter": lambda rng: _ht.load_or_build("jupiter_v1", _ht.jupiter_texture),
+    "saturn":  lambda rng: _ht.load_or_build("saturn_v1", _ht.saturn_texture),
+})
 # Tất cả quỹ đạo nằm trên cùng một mặt phẳng (mặt phẳng hoàng đạo) như thực tế.
 # Khoảng cách và độ lệch tâm được chọn để các hành tinh (kể cả Mặt Trăng, vành đai) không chạm nhau.
 PLANETS = [
     {"name": "Mercury", "texture": "mercury", "radius": 0.25,
      "orbit_radius": 3.6, "orbit_eccentricity": 0.21, "orbit_omega": 30,
      "orbit_speed": 36.3, "phase": 20,
-     "spin": 10.0, "tilt": 0.03},
+     "spin": 1.5, "tilt": 0.03},
 
     {"name": "Venus", "texture": "venus", "radius": 0.40,
      "orbit_radius": 5.4, "orbit_eccentricity": 0.02, "orbit_omega": 100,
      "orbit_speed": 20.9, "phase": 110,
-     "spin": 6.0, "tilt": 177.0,
-     "halo": (1.0, 0.80, 0.45, 0.55)},
+     "spin": -1.2, "tilt": 177.0,
+     "halo": (1.0, 0.80, 0.45, 0.16)},
 
     {"name": "Earth", "texture": "earth", "radius": 0.45,
      "orbit_radius": 7.5, "orbit_eccentricity": 0.03, "orbit_omega": 170,
      "orbit_speed": 14.0, "phase": 200,
-     "spin": 90.0, "tilt": 23.4, "clouds": True,
-     "halo": (0.35, 0.60, 1.0, 0.85),
+     "spin": 15.0, "tilt": 23.4, "clouds": True,
+     "halo": (0.35, 0.60, 1.0, 0.22),
      "moon": {"radius": 0.13, "dist": 0.95, "speed": 110.0}},
 
     {"name": "Mars", "texture": "mars", "radius": 0.35,
      "orbit_radius": 9.9, "orbit_eccentricity": 0.06, "orbit_omega": 250,
      "orbit_speed": 9.5, "phase": 300,
-     "spin": 85.0, "tilt": 25.2,
-     "halo": (1.0, 0.55, 0.35, 0.25)},
+     "spin": 14.4, "tilt": 25.2,
+     "halo": (1.0, 0.55, 0.35, 0.08)},
 
     {"name": "Jupiter", "texture": "jupiter", "radius": 0.95,
      "orbit_radius": 14.5, "orbit_eccentricity": 0.05, "orbit_omega": 40,
      "orbit_speed": 4.5, "phase": 60,
-     "spin": 180.0, "tilt": 3.1},
+     "spin": 36.0, "tilt": 3.1},
 
     {"name": "Saturn", "texture": "saturn", "radius": 0.80,
      "orbit_radius": 19.5, "orbit_eccentricity": 0.05, "orbit_omega": 320,
      "orbit_speed": 3.5, "phase": 250,
-     "spin": 170.0, "tilt": 26.7,
+     "spin": 33.0, "tilt": 26.7,
      "rings": {"kind": "saturn", "inner": 1.25, "outer": 2.3}},
 
     {"name": "Uranus", "texture": "uranus", "radius": 0.60,
      "orbit_radius": 25.0, "orbit_eccentricity": 0.03, "orbit_omega": 200,
      "orbit_speed": 2.9, "phase": 150,
-     "spin": 110.0, "tilt": 97.8,
-     "halo": (0.50, 0.90, 0.95, 0.35),
+     "spin": -20.0, "tilt": 97.8,
+     "halo": (0.50, 0.90, 0.95, 0.12),
      "rings": {"kind": "uranus", "inner": 1.5, "outer": 2.1}},
 
     {"name": "Neptune", "texture": "neptune", "radius": 0.60,
      "orbit_radius": 28.5, "orbit_eccentricity": 0.01, "orbit_omega": 120,
      "orbit_speed": 2.5, "phase": 330,
-     "spin": 120.0, "tilt": 28.3,
-     "halo": (0.30, 0.50, 1.0, 0.50)},
+     "spin": 22.0, "tilt": 28.3,
+     "halo": (0.30, 0.50, 1.0, 0.16)},
 ]
 PLANET_INFO = {
     "Mercury": {"a": 57.91, "period": "88 NGAY", "rotation": "58.6 NGAY",
@@ -315,6 +394,7 @@ _sphere_list = None
 _tex = {}
 _glow_tex = None
 _halo_tex = None
+_corona_tex = None
 
 
 def _upload(img, mip=True, clamp_s=False):
@@ -404,7 +484,7 @@ def _build_rings(kind, inner, outer, rng, steps=200, seg=128):
 
 def init_planets():
     """Goi 1 lan SAU khi da co OpenGL context."""
-    global _sphere_list, _glow_tex, _halo_tex
+    global _sphere_list, _glow_tex, _halo_tex, _corona_tex
 
     rng = np.random.default_rng(7)
 
@@ -422,11 +502,22 @@ def init_planets():
 
     _glow_tex = _radial_texture(lambda r: np.where(r < 1, np.clip(1 - r, 0, None) ** 2.4, 0))
     _halo_tex = _radial_texture(lambda r: np.exp(-((r - 0.72) / 0.10) ** 2))
+    yy, xx = np.mgrid[-1:1:256j, -1:1:256j]
+    r = np.hypot(xx, yy)
+    angle = np.arctan2(yy, xx)
+    filaments = (0.82
+                 + 0.10 * np.sin(angle * 9.0 + r * 13.0)
+                 + 0.08 * np.sin(angle * 19.0 - r * 21.0))
+    corona = np.exp(-((r - 1.10) / 0.40) ** 2) * np.clip(filaments, 0.35, 1.0)
+    corona_img = np.ones((256, 256, 4), np.float32)
+    corona_img[..., 3] = np.clip(corona, 0, 1)
+    _corona_tex = _upload(corona_img, mip=False, clamp_s=True)
 
     for p in PLANETS:
         p["tex"] = _tex[p["texture"]]
         if p.get("clouds"):
             p["clouds_tex"] = _tex["clouds"]
+            p["lights_tex"] = _tex["earth_lights"]
         if p.get("moon"):
             p["moon"]["tex"] = _tex["moon"]
         if p.get("rings"):
@@ -449,6 +540,29 @@ def _textured_sphere(tex, radius, spin=0.0):
     glCallList(_sphere_list)
     glPopMatrix()
     glDisable(GL_TEXTURE_2D)
+
+
+def _draw_atmosphere(radius, color):
+    """Lop mao khi trong suot: danh sang mem o ranh gioi thay vi neon deu."""
+    glDisable(GL_LIGHTING)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE)
+    glEnable(GL_CULL_FACE)
+    glCullFace(GL_FRONT)
+    glDepthMask(GL_FALSE)
+    glEnable(GL_TEXTURE_2D)
+    glBindTexture(GL_TEXTURE_2D, _halo_tex)
+    glColor4f(*color)
+    glPushMatrix()
+    glScalef(radius * 1.09, radius * 1.09, radius * 1.09)
+    glCallList(_sphere_list)
+    glPopMatrix()
+    glBindTexture(GL_TEXTURE_2D, 0)
+    glDisable(GL_TEXTURE_2D)
+    glDepthMask(GL_TRUE)
+    glDisable(GL_CULL_FACE)
+    glDisable(GL_BLEND)
+    glEnable(GL_LIGHTING)
 
 
 def _draw_billboard(tex, half, color):
@@ -484,11 +598,39 @@ def draw_sun(t):
     glDisable(GL_LIGHTING)
     glPushMatrix()
     glRotatef(-90, 1, 0, 0)
-    _textured_sphere(_tex["sun"], 1.5, t * 4.0)
+    _textured_sphere(_tex["sun"], 1.5, t * 1.4)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE)
+    glDepthMask(GL_FALSE)
+    _textured_sphere(_tex["sun_flow"], 1.508, -t * 2.2)
+    _textured_sphere(_tex["sun_flow"], 1.516, t * 1.1)
+    glDepthMask(GL_TRUE)
+    glDisable(GL_BLEND)
     glPopMatrix()
 
-    _draw_billboard(_glow_tex, 5.0, (1.0, 0.62, 0.20, 0.90))
-    _draw_billboard(_glow_tex, 10.0, (1.0, 0.40, 0.10, 0.28))
+    glPushMatrix()
+    glDisable(GL_LIGHTING)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE)
+    glEnable(GL_CULL_FACE)
+    glCullFace(GL_FRONT)
+    glDepthMask(GL_FALSE)
+
+    for scale, alpha, red, green in (
+        (1.035, 0.28, 1.0, 0.58),
+        (1.090, 0.18, 1.0, 0.36),
+        (1.180, 0.09, 1.0, 0.20),
+    ):
+        glColor4f(red, green, 0.025, alpha)
+        glPushMatrix()
+        glScalef(scale * 1.50, scale * 1.50, scale * 1.50)
+        glCallList(_sphere_list)
+        glPopMatrix()
+    glDepthMask(GL_TRUE)
+    glDisable(GL_CULL_FACE)
+    glDisable(GL_BLEND)
+    glEnable(GL_LIGHTING)
+    glPopMatrix()
     glEnable(GL_LIGHTING)
 
 
@@ -507,9 +649,13 @@ def _draw_rings(planet):
     glScalef(s, s, s)
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    glDisable(GL_LIGHTING)
+    glDepthFunc(GL_LEQUAL)
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)
     glCallList(planet["ring_list"])
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE)
+    glEnable(GL_LIGHTING)
+    glDepthFunc(GL_LESS)
     glDisable(GL_BLEND)
     glPopMatrix()
 
@@ -548,6 +694,9 @@ def draw_planet(planet, t):
     glPushMatrix()
     glTranslatef(x, y, z)
 
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (72.0,))
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (0.48, 0.48, 0.52, 1.0))
+
     if planet.get("moon"):
         _draw_moon(planet["moon"], t)
 
@@ -564,10 +713,21 @@ def draw_planet(planet, t):
         glDepthMask(GL_TRUE)
         glDisable(GL_BLEND)
 
+    if planet.get("lights_tex"):
+        glDisable(GL_LIGHTING)
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE)
+        glDepthMask(GL_FALSE)
+        _textured_sphere(planet["lights_tex"], r * 1.012, spin)
+        glDepthMask(GL_TRUE)
+        glDisable(GL_BLEND)
+        glEnable(GL_LIGHTING)
+
     if planet.get("ring_list"):
         _draw_rings(planet)
 
     if planet.get("halo"):
-        _draw_billboard(_halo_tex, r / 0.72, planet["halo"])
+        halo = planet["halo"]
+        _draw_atmosphere(r, (halo[0], halo[1], halo[2], halo[3]))
 
     glPopMatrix()

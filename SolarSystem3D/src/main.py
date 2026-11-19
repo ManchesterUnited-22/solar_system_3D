@@ -69,6 +69,24 @@ for _ in range(1800):
     tr, tg, tb = random.choice(STAR_TINTS)
     star_groups[k].append((x, y, z, tr * b, tg * b, tb * b))
 
+# Dải Ngân Hà: quầng sao lép vế theo một mặt phẳng nghiêng, tạo chiều sâu nền.
+milky_way = []
+for _ in range(4200):
+    u = random.uniform(-1, 1)
+    v = random.uniform(-1, 1)
+    theta = random.uniform(-0.24, 0.24)
+    radius = random.uniform(68, 112)
+    band_x = u * radius
+    band_z = v * radius * 0.18
+    band_y = theta * radius
+    rot = math.radians(38)
+    x = band_x * math.cos(rot) - band_z * math.sin(rot)
+    z = band_x * math.sin(rot) + band_z * math.cos(rot)
+    density = math.exp(-((u * u + v * v) * 0.20))
+    b = random.uniform(0.25, 0.75) * density
+    milky_way.append((x, band_y, z, 0.55 + b * 0.25,
+                      0.62 + b * 0.30, 1.0))
+
 
 def _ease(t):
     return t * t * (3.0 - 2.0 * t)          # smoothstep
@@ -141,7 +159,7 @@ def mouse_button_callback(window, button, action, mods):
 
     if button == glfw.MOUSE_BUTTON_RIGHT:
         if action == glfw.PRESS:
-            show_orbits = (action == glfw.PRESS)         # giữ chuột phải = hiện, thả = ẩn
+            show_orbits = not show_orbits
         return
 
     if button != glfw.MOUSE_BUTTON_LEFT:
@@ -195,7 +213,7 @@ def scroll_callback(window, xoffset, yoffset):
 
 
 def key_callback(window, key, scancode, action, mods):
-    global sim_speed, paused, white_bg
+    global sim_speed, paused, white_bg, show_orbits
 
     if action == glfw.RELEASE:
         return
@@ -210,6 +228,8 @@ def key_callback(window, key, scancode, action, mods):
         sim_speed = 1.0
     elif key == glfw.KEY_B and action == glfw.PRESS:
         white_bg = not white_bg
+    elif key == glfw.KEY_O and action == glfw.PRESS:
+        show_orbits = not show_orbits
     elif key == glfw.KEY_ESCAPE:
         if focus is not None:
             clear_focus()                    # ESC lần 1: về toàn hệ
@@ -250,6 +270,13 @@ def draw_stars():
             glColor3f(r, g, b)
             glVertex3f(x, y, z)
         glEnd()
+
+    glPointSize(1.1)
+    glBegin(GL_POINTS)
+    for x, y, z, r, g, b in milky_way:
+        glColor3f(r, g, b)
+        glVertex3f(x, y, z)
+    glEnd()
     glPopMatrix()
 
     glDepthMask(GL_TRUE)
@@ -267,6 +294,9 @@ def setup_lighting(full_bright=False):
     glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
 
     glLightfv(GL_LIGHT0, GL_POSITION, (0, 0, 0, 1))
+    glLightf(GL_LIGHT0, GL_CONSTANT_ATTENUATION, 0.35)
+    glLightf(GL_LIGHT0, GL_LINEAR_ATTENUATION, 0.012)
+    glLightf(GL_LIGHT0, GL_QUADRATIC_ATTENUATION, 0.0012)
 
     if full_bright:
         # Nền trắng: sáng phẳng, mọi hành tinh hiện đủ màu
@@ -275,9 +305,9 @@ def setup_lighting(full_bright=False):
         glLightfv(GL_LIGHT0, GL_SPECULAR, (0.0, 0.0, 0.0, 1.0))
     else:
         # Nền đen: chiếu sáng theo Mặt Trời
-        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.10, 0.10, 0.13, 1.0))
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 0.92, 0.75, 1.0))
-        glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 1.0, 1.0, 1.0))
+        glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.018, 0.020, 0.035, 1.0))
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, (1.0, 0.94, 0.72, 1.0))
+        glLightfv(GL_LIGHT0, GL_SPECULAR, (1.0, 0.82, 0.55, 1.0))
 
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_NORMALIZE)
