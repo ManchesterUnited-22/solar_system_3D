@@ -285,6 +285,26 @@ PLANETS = [
      "spin": 120.0, "tilt": 28.3,
      "halo": (0.30, 0.50, 1.0, 0.50)},
 ]
+PLANET_INFO = {
+    "Mercury": {"a": 57.91, "period": "88 NGAY", "rotation": "58.6 NGAY",
+                "diameter": "4,879 KM", "temp": "167 C"},
+    "Venus":   {"a": 108.21, "period": "224.7 NGAY", "rotation": "243 NGAY (NGUOC)",
+                "diameter": "12,104 KM", "temp": "464 C"},
+    "Earth":   {"a": 149.60, "period": "365.25 NGAY", "rotation": "24 GIO",
+                "diameter": "12,742 KM", "temp": "15 C"},
+    "Mars":    {"a": 227.94, "period": "687 NGAY", "rotation": "24.6 GIO",
+                "diameter": "6,779 KM", "temp": "-65 C"},
+    "Jupiter": {"a": 778.57, "period": "11.86 NAM", "rotation": "9.9 GIO",
+                "diameter": "139,820 KM", "temp": "-110 C"},
+    "Saturn":  {"a": 1433.5, "period": "29.46 NAM", "rotation": "10.7 GIO",
+                "diameter": "116,460 KM", "temp": "-140 C"},
+    "Uranus":  {"a": 2872.5, "period": "84.0 NAM", "rotation": "17.2 GIO (NGUOC)",
+                "diameter": "50,724 KM", "temp": "-195 C"},
+    "Neptune": {"a": 4495.1, "period": "164.8 NAM", "rotation": "16.1 GIO",
+                "diameter": "49,244 KM", "temp": "-200 C"},
+}
+
+SUN_GM = 1.32712e11          # km^3/s^2
 
 
 # =====================================================================
@@ -508,6 +528,17 @@ def planet_position(planet, t):
         math.radians(planet.get("orbit_omega", 0.0)),
     )
 
+def planet_stats(planet, t):
+    """(khoảng cách tới Mặt Trời [triệu km], vận tốc [km/s]) tại thời điểm mô phỏng t.
+
+    Tỉ lệ r/a lấy từ chính quỹ đạo elip đang vẽ; vận tốc theo công thức vis-viva
+    v = sqrt(GM * (2/r - 1/a)) nên nhanh ở cận nhật, chậm ở viễn nhật.
+    """
+    a = PLANET_INFO[planet["name"]]["a"] * 1e6            # km
+    x, y, z = planet_position(planet, t)
+    r = math.sqrt(x * x + y * y + z * z) / planet["orbit_radius"] * a
+    v = math.sqrt(SUN_GM * (2.0 / r - 1.0 / a))
+    return r / 1e6, v
 
 def draw_planet(planet, t):
     x, y, z = planet_position(planet, t)

@@ -5,8 +5,9 @@ import glfw
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective, gluLookAt, gluProject
 
-from planet import PLANETS, init_planets, draw_sun, draw_planet, planet_position
-from orbit import draw_asteroid_belt
+from planet import (PLANETS, PLANET_INFO, init_planets, draw_sun, draw_planet,
+                    planet_position, planet_stats)
+from orbit import draw_asteroid_belt, draw_orbit
 import properties_panel as ui
 
 WIDTH, HEIGHT = 1200, 800
@@ -27,8 +28,8 @@ sim_time = 0.0
 sim_speed = 1.0
 paused = False
 
-# Nền trắng (phím B để đổi)
 white_bg = False
+show_orbits = False
 
 
 
@@ -48,21 +49,25 @@ trans_from_dist = camera_distance
 # Ma trận của khung hình gần nhất (để đổi toạ độ 3D -> pixel khi bấm chuột)
 cam_eye = (0.0, 0.0, 0.0)
 view_mats = None
-
-# Tạo sao nền
+# Tạo sao nền (chia theo kích thước điểm để vẽ nhanh)
 random.seed(10)
-stars = []
+STAR_SIZES = (1.4, 2.2, 3.2)
+STAR_TINTS = ((0.75, 0.80, 1.00), (1.00, 1.00, 1.00), (1.00, 0.88, 0.72))
+star_groups = [[] for _ in STAR_SIZES]
 
-for _ in range(900):
+for _ in range(1800):
     theta = random.uniform(0, 2 * math.pi)
-    phi = random.uniform(0, math.pi)
+    phi = math.acos(random.uniform(-1, 1))      
     radius = random.uniform(65, 100)
 
     x = radius * math.sin(phi) * math.cos(theta)
     y = radius * math.cos(phi)
     z = radius * math.sin(phi) * math.sin(theta)
 
-    stars.append((x, y, z, random.uniform(0.3, 1.0)))
+    b = random.uniform(0.3, 1.0)
+    k = 2 if b > 0.93 else (1 if b > 0.70 else 0)  
+    tr, tg, tb = random.choice(STAR_TINTS)
+    star_groups[k].append((x, y, z, tr * b, tg * b, tb * b))
 
 
 def _ease(t):
@@ -132,7 +137,12 @@ def pick_planet(window, x, y):
 
 def mouse_button_callback(window, button, action, mods):
     global dragging, last_x, last_y
-    global press_x, press_y
+    global press_x, press_y, show_orbits
+
+    if button == glfw.MOUSE_BUTTON_RIGHT:
+        if action == glfw.PRESS:
+            show_orbits = (action == glfw.PRESS)         # giữ chuột phải = hiện, thả = ẩn
+        return
 
     if button != glfw.MOUSE_BUTTON_LEFT:
         return
@@ -207,16 +217,45 @@ def key_callback(window, key, scancode, action, mods):
             glfw.set_window_should_close(window, True)
 
 
+def info_rows(planet):
+    """Các dòng (nhãn, giá trị) của hộp thông tin. Khoảng cách và vận tốc đổi theo thời gian."""
+    info = PLANET_INFO[planet["name"]]
+    dist, vel = planet_stats(planet, sim_time)
+    return [
+        ("KHOANG CACH", f"{dist:.1f} TR KM"),
+        ("VAN TOC", f"{vel:.1f} KM/S"),
+        ("CACH MAT TROI TB", f"{info['a'] / 149.598:.2f} AU"),
+        ("CHU KY QUY DAO", info["period"]),
+        ("TU QUAY", info["rotation"]),
+        ("DUONG KINH", info["diameter"]),
+        ("NHIET DO TB", info["temp"]),
+    ]
+
+
 def draw_stars():
+    """Sao nền luôn nằm quanh camera nên camera không bao giờ chui ra ngoài lớp sao."""
     glDisable(GL_LIGHTING)
-    glPointSize(2.0)
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    glEnable(GL_POINT_SMOOTH)                # điểm tròn thay vì vuông
+    glHint(GL_POINT_SMOOTH_HINT, GL_NICEST)
+    glDepthMask(GL_FALSE)
 
-    glBegin(GL_POINTS)
-    for x, y, z, b in stars:
-        glColor3f(0.75 * b, 0.80 * b, b)
-        glVertex3f(x, y, z)
-    glEnd()
+    glPushMatrix()
+    glTranslatef(*cam_eye)
+    for size, group in zip(STAR_SIZES, star_groups):
+        glPointSize(size)
+        glBegin(GL_POINTS)
+        for x, y, z, r, g, b in group:
+            glColor3f(r, g, b)
+            glVertex3f(x, y, z)
+        glEnd()
+    glPopMatrix()
 
+    glDepthMask(GL_TRUE)
+    glDisable(GL_POINT_SMOOTH)
+    glDisable(GL_BLEND)
+    glPointSize(1.0)
     glEnable(GL_LIGHTING)
 
 
@@ -344,7 +383,10 @@ def main():
 
         # Quỹ đạo (phím O) và vành đai tiểu hành tinh
         glDisable(GL_LIGHTING)
-       
+        if show_orbits:
+            for p in PLANETS:
+                draw_orbit(p["orbit_radius"], p["orbit_eccentricity"],
+                           math.radians(p.get("orbit_omega", 0.0)))
         draw_asteroid_belt(sim_time)
         glEnable(GL_LIGHTING)
 
@@ -353,10 +395,11 @@ def main():
         for planet in PLANETS:
             draw_planet(planet, sim_time)
 
-        # Hành tinh đang chọn: chỉ hiện tên
+                # Hành tinh đang chọn: hộp thông tin
         if focus is not None:
             win_w, win_h = glfw.get_window_size(window)
-            ui.draw_info_panel(PLANETS[focus]["name"].upper(), win_w, win_h)
+            p = PLANETS[focus]
+            ui.draw_info_panel(p["name"].upper(), info_rows(p), win_w, win_h)
 
         glfw.swap_buffers(window)
 

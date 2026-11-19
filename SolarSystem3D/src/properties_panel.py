@@ -1,16 +1,19 @@
-"""Hộp hiển thị tên hành tinh đang được chọn (vẽ 2D bằng OpenGL, không cần thư viện ngoài).
+"""Hộp thông tin hành tinh đang được chọn (vẽ 2D bằng OpenGL, không cần thư viện ngoài).
 
 Toạ độ trong file này tính theo pixel cửa sổ, gốc ở góc trái trên.
 """
 from OpenGL.GL import *
 
 PANEL_X, PANEL_Y = 12, 12
-PANEL_W = 270
-TITLE_H = 32
-PAD = 12
-SCALE = 2                      # mỗi ô của font 5x7 = 2x2 pixel
+PANEL_W = 360
+TITLE_H = 44
+ROW_H = 22
+PAD = 14
+SCALE = 2                      # mỗi ô của font 5x7 = 2x2 pixel (chữ thường)
+TITLE_SCALE = 3                # tên hành tinh to hơn
 
 WHITE = (1.0, 1.0, 1.0)
+LABEL = (0.62, 0.68, 0.82)
 
 # ---------------------------------------------------------------------
 #  Font bitmap 5x7 (chỉ chữ in hoa, số và vài ký hiệu)
@@ -56,6 +59,10 @@ FONT = {
     "7": ["#####", "    #", "   # ", "  #  ", " #   ", " #   ", " #   "],
     "8": [" ### ", "#   #", "#   #", " ### ", "#   #", "#   #", " ### "],
     "9": [" ### ", "#   #", "#   #", " ####", "    #", "   # ", " ##  "],
+    "/": ["    #", "    #", "   # ", "  #  ", " #   ", "#    ", "#    "],
+    ",": ["     ", "     ", "     ", "     ", " ##  ", "  #  ", " #   "],
+    "(": ["   # ", "  #  ", " #   ", " #   ", " #   ", "  #  ", "   # "],
+    ")": [" #   ", "  #  ", "   # ", "   # ", "   # ", "  #  ", " #   "],
     " ": ["     "] * 7,
 }
 
@@ -119,25 +126,30 @@ def _end_2d():
 
 
 # ---------------------------------------------------------------------
-#  Hộp tên hành tinh đang được chọn (góc trái trên)
+#  Hộp thông tin hành tinh đang được chọn (góc trái trên)
 # ---------------------------------------------------------------------
 
+_panel_h = TITLE_H             # chiều cao hộp ở khung hình gần nhất (dùng cho hit-test)
+
+
 def info_panel_rect():
-    return PANEL_X, PANEL_Y, PANEL_W, TITLE_H
+    return PANEL_X, PANEL_Y, PANEL_W, _panel_h
 
 
 def hit_test_info(x, y):
-    """True nếu con trỏ nằm trong hộp tên (để không xoay camera / bỏ chọn)."""
+    """True nếu con trỏ nằm trong hộp thông tin (để không xoay camera / bỏ chọn)."""
     px, py, pw, ph = info_panel_rect()
     return px <= x <= px + pw and py <= y <= py + ph
 
 
-def draw_info_panel(name, win_w, win_h):
-    """Chỉ hiển thị tên hành tinh đang được chọn."""
+def draw_info_panel(name, rows, win_w, win_h):
+    """Hộp thông tin: tên hành tinh + các dòng (nhãn, giá trị)."""
+    global _panel_h
+    _panel_h = TITLE_H + 10 + len(rows) * ROW_H + 2
     _begin_2d(win_w, win_h)
     px, py, pw, ph = info_panel_rect()
 
-    _rect(px, py, pw, ph, (0.14, 0.16, 0.22), 0.95)
+    _rect(px, py, pw, ph, (0.10, 0.12, 0.18), 0.92)
     glColor4f(0.35, 0.40, 0.55, 1.0)
     glLineWidth(1.0)
     glBegin(GL_LINE_LOOP)
@@ -147,6 +159,15 @@ def draw_info_panel(name, win_w, win_h):
     glVertex2f(px, py + ph)
     glEnd()
 
-    _text(px + PAD, py + (ph - 7 * SCALE) / 2, name, WHITE)
+    # Tên hành tinh + đường kẻ ngăn
+    _text(px + PAD, int(py + (TITLE_H - 7 * TITLE_SCALE) / 2), name, WHITE, TITLE_SCALE)
+    _rect(px + PAD, py + TITLE_H, pw - 2 * PAD, 1, (0.35, 0.40, 0.55), 1.0)
+
+    # Nhãn căn trái, giá trị căn phải
+    y = py + TITLE_H + 10
+    for label, value in rows:
+        _text(px + PAD, y, label, LABEL)
+        _text(px + pw - PAD - _text_width(value), y, value, WHITE)
+        y += ROW_H
 
     _end_2d()

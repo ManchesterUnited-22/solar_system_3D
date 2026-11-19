@@ -2,7 +2,7 @@ import math
 import random
 from OpenGL.GL import *
 
-_belt_list = None
+_belt_lists = []
 
 
 def solve_kepler(mean_anomaly, eccentricity):
@@ -55,7 +55,7 @@ def draw_orbit(semi_major_axis, eccentricity=0.0, omega=0.0,
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
     glEnable(GL_LINE_SMOOTH)
-    glColor4f(0.55, 0.65, 0.90, 0.35)
+    glColor4f(0.55, 0.65, 0.90, 0.60)
 
     glBegin(GL_LINE_LOOP)
     for i in range(segments):
@@ -67,28 +67,56 @@ def draw_orbit(semi_major_axis, eccentricity=0.0, omega=0.0,
     glDisable(GL_BLEND)
 
 
-def _build_belt(n=2200, r_in=11.3, r_out=12.0):
-    global _belt_list
+BELT_R_MIN, BELT_R_MAX = 10.9, 12.5     # nằm giữa Sao Hỏa (~10.5) và Sao Mộc (~13.8)
+BELT_BANDS = 6                          # chia vành đai thành các dải quay với tốc độ khác nhau
+BELT_SIZES = (1.5, 2.2, 3.2)            # kích thước điểm: nhỏ / vừa / lớn
+
+
+def _build_belt(n=7000):
+    global _belt_lists
     rnd = random.Random(5)
-    _belt_list = glGenLists(1)
-    glNewList(_belt_list, GL_COMPILE)
-    glPointSize(1.8)
-    glBegin(GL_POINTS)
+    bands = [[] for _ in range(BELT_BANDS)]
     for _ in range(n):
+        # Tập trung ở giữa vành đai, thưa dần ra hai mép
+        r = min(BELT_R_MAX, max(BELT_R_MIN, rnd.gauss(11.7, 0.38)))
         ang = rnd.uniform(0, 2 * math.pi)
-        r = rnd.uniform(r_in, r_out)
-        y = rnd.gauss(0, 0.05)
-        b = rnd.uniform(0.35, 0.8)
-        glColor3f(0.75 * b, 0.68 * b, 0.58 * b)
-        glVertex3f(r * math.cos(ang), y, r * math.sin(ang))
-    glEnd()
-    glEndList()
+        y = rnd.gauss(0, 0.07)
+        b = rnd.uniform(0.35, 0.90)
+        k = 2 if b > 0.82 else (1 if b > 0.62 else 0)      # tảng sáng thì to hơn
+        band = min(BELT_BANDS - 1,
+                   int((r - BELT_R_MIN) / (BELT_R_MAX - BELT_R_MIN) * BELT_BANDS))
+        bands[band].append((r * math.cos(ang), y, r * math.sin(ang), b, k))
+
+    _belt_lists = []
+    for band, pts in enumerate(bands):
+        r_mid = BELT_R_MIN + (band + 0.5) * (BELT_R_MAX - BELT_R_MIN) / BELT_BANDS
+        # Định luật Kepler thứ 3: càng xa càng quay chậm (lấy Sao Hỏa làm mốc)
+        speed = 9.5 * (9.9 / r_mid) ** 1.5
+        lst = glGenLists(1)
+        glNewList(lst, GL_COMPILE)
+        for k, size in enumerate(BELT_SIZES):
+            glPointSize(size)
+            glBegin(GL_POINTS)
+            for x, y, z, b, kk in pts:
+                if kk == k:
+                    glColor3f(0.80 * b, 0.72 * b, 0.60 * b)
+                    glVertex3f(x, y, z)
+            glEnd()
+        glEndList()
+        _belt_lists.append((lst, speed))
 
 
 def draw_asteroid_belt(t):
-    if _belt_list is None:
+    if not _belt_lists:
         _build_belt()
-    glPushMatrix()
-    glRotatef(t * 2.0, 0, 1, 0)
-    glCallList(_belt_list)
-    glPopMatrix()
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+    glEnable(GL_POINT_SMOOTH)
+    for lst, speed in _belt_lists:
+        glPushMatrix()
+        glRotatef(t * speed, 0, 1, 0)
+        glCallList(lst)
+        glPopMatrix()
+    glDisable(GL_POINT_SMOOTH)
+    glDisable(GL_BLEND)
+    glPointSize(1.0)
