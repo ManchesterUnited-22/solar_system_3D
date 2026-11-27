@@ -92,45 +92,21 @@ def _craters(img, rng, count, rmin, rmax, dark=0.5):
 # =====================================================================
 
 def tex_sun(rng):
-    broad = _norm(_fbm(rng, 5, 6, 0.58))
-    cells = _norm(_fbm(rng, 28, 5, 0.48))
-    fine = _norm(_fbm(rng, 92, 4, 0.45))
+    """Mặt Trời: plasma đỏ cam, các mảng nâu đỏ sẫm và gân sáng vàng (như ảnh mẫu)."""
+    a = _norm(_fbm(rng, 10, 6, 0.62))     # các mảng sáng/tối vừa
+    b = _norm(_fbm(rng, 40, 4, 0.60))     # hạt nhỏ li ti
+    t = np.clip(0.50 * a + 0.50 * b, 0, 1)
+    t = np.clip((t - 0.5) * 1.6 + 0.5, 0, 1)     # tăng tương phản
 
-    heat = np.clip(0.50 * broad + 0.32 * cells + 0.18 * fine, 0, 1)
-    img = _lerp((0.92, 0.018, 0.002), (1.00, 0.32, 0.008), heat)
-    hot = _smoothstep(0.62, 0.94, cells + fine * 0.28)
-    img = _lerp(img, (1.00, 0.58, 0.055), hot * 0.72)
-    white_hot = _smoothstep(0.82, 0.98, fine * 0.45 + cells * 0.55)
-    img = _lerp(img, (1.00, 0.96, 0.72), white_hot * 0.58)
+    # Thang màu: nâu đỏ sẫm -> đỏ cam -> cam -> vàng cam (đa số là cam đỏ)
+    img = _lerp((0.22, 0.04, 0.02), (0.72, 0.15, 0.03), _smoothstep(0.15, 0.40, t))
+    img = _lerp(img, (0.98, 0.38, 0.05), _smoothstep(0.38, 0.62, t))
+    img = _lerp(img, (1.00, 0.66, 0.14), _smoothstep(0.65, 0.92, t))
 
-    yy, xx = np.mgrid[0:TEX_H, 0:TEX_W]
-    for cx, cy, rx, ry in (
-        (0.14 * TEX_W, 0.30 * TEX_H, 9, 4),
-        (0.31 * TEX_W, 0.68 * TEX_H, 8, 5),
-        (0.58 * TEX_W, 0.41 * TEX_H, 11, 5),
-        (0.72 * TEX_W, 0.24 * TEX_H, 7, 4),
-        (0.80 * TEX_W, 0.72 * TEX_H, 12, 6),
-        (0.46 * TEX_W, 0.82 * TEX_H, 6, 4),
-    ):
-        d = ((xx - cx) / rx) ** 2 + ((yy - cy) / ry) ** 2
-        spot = np.exp(-d * 2.1)
-        img = _lerp(img, (1.0, 0.78, 0.12), spot * 0.88)
-
-    grain = _smoothstep(0.88, 0.98, fine)
-    img = _lerp(img, (1.0, 0.62, 0.06), grain * 0.12)
-    return np.clip(img, 0, 1)
-
-
-def tex_sun_flow(rng):
-    """Very subtle transparent convection on the photosphere."""
-    fine = _norm(_fbm(rng, 58, 4, 0.48))
-    medium = _norm(_fbm(rng, 16, 5, 0.52))
-    flow = np.clip(0.68 * fine + 0.32 * medium, 0, 1)
-    alpha = _smoothstep(0.45, 0.78, flow) * 0.58
-    img = np.zeros((TEX_H, TEX_W, 4), np.float32)
-    img[..., 0:3] = _lerp((1.0, 0.16, 0.002), (1.0, 0.82, 0.14), flow)
-    img[..., 3] = alpha
-    return img
+    # Gân sáng vàng mảnh chảy giữa các mảng (nhiễu dạng sườn núi)
+    r = 1.0 - np.abs(2.0 * _norm(_fbm(rng, 18, 5, 0.55)) - 1.0)
+    vein = _smoothstep(0.80, 0.98, r) * _smoothstep(0.30, 0.65, t)
+    return _lerp(img, (1.00, 0.88, 0.42), vein * 0.75)
 
 
 def tex_mercury(rng):
@@ -268,104 +244,63 @@ _BUILDERS = {
     "venus": tex_venus, "earth": tex_earth, "clouds": tex_clouds,
     "mars": tex_mars, "jupiter": tex_jupiter, "saturn": tex_saturn,
     "uranus": tex_uranus, "neptune": tex_neptune,
-    "sun_flow": tex_sun_flow,
 }
 
-# Texture VE TAY (hand_textures.py) thay cho noise o cac hanh tinh co be mat dac trung.
-# Lan chay dau se ve va luu vao assets/textures/*.png, cac lan sau doc lai rat nhanh.
-import hand_textures as _ht
 
-_BUILDERS.update({
-    "earth":   lambda rng: _ht.load_or_build("earth_day_v1", _ht.earth_texture),
-    "earth_lights": lambda rng: _ht.load_or_build("earth_lights_v1", _ht.earth_lights_texture),
-    "moon":    lambda rng: _ht.load_or_build("moon_v1", _ht.moon_texture),
-    "mercury": lambda rng: _ht.load_or_build("mercury_v1", _ht.mercury_texture),
-    "mars":    lambda rng: _ht.load_or_build("mars_v1", _ht.mars_texture),
-    "jupiter": lambda rng: _ht.load_or_build("jupiter_v1", _ht.jupiter_texture),
-    "saturn":  lambda rng: _ht.load_or_build("saturn_v1", _ht.saturn_texture),
-})
-# Texture cai tien (textures_v3.py): may, Mat Trang, Sao Hoa, Mat Troi, Sao Hai Vuong
-import textures_v3 as _t3
+# =====================================================================
+#  DU LIEU HANH TINH (quỹ đạo cùng nằm trên một mặt phẳng, các hành tinh không chạm nhau)
+#  tilt: do nghieng truc | spin: do/giay | orbit_speed: do/giay
+# =====================================================================
 
-_BUILDERS.update({
-    "clouds":   lambda rng: _ht.load_or_build("clouds_v3", _t3.clouds_texture),
-    "moon":     lambda rng: _ht.load_or_build("moon_v3", _t3.moon_texture),
-    "mars":     lambda rng: _ht.load_or_build("mars_v3", _t3.mars_texture),
-    "sun":      lambda rng: _ht.load_or_build("sun_v3", _t3.sun_texture),
-    "sun_flow": lambda rng: _ht.load_or_build("sun_flow_v3", _t3.sun_flow_texture),
-    "neptune":  lambda rng: _ht.load_or_build("neptune_v3", _t3.neptune_texture),
-})
-# Tất cả quỹ đạo nằm trên cùng một mặt phẳng (mặt phẳng hoàng đạo) như thực tế.
-# Khoảng cách và độ lệch tâm được chọn để các hành tinh (kể cả Mặt Trăng, vành đai) không chạm nhau.
 PLANETS = [
     {"name": "Mercury", "texture": "mercury", "radius": 0.25,
-     "orbit_radius": 3.6, "orbit_eccentricity": 0.21, "orbit_omega": 30,
-     "orbit_speed": 36.3, "phase": 20,
-     "spin": 1.5, "tilt": 0.03},
+     "orbit_radius": 3.6, "orbit_eccentricity": 0.21,
+     "orbit_speed": 24.0, "phase": 20,
+     "spin": 10.0, "tilt": 0.03},
 
     {"name": "Venus", "texture": "venus", "radius": 0.40,
-     "orbit_radius": 5.4, "orbit_eccentricity": 0.02, "orbit_omega": 100,
-     "orbit_speed": 20.9, "phase": 110,
-     "spin": -1.2, "tilt": 177.0,
-     "halo": (1.0, 0.80, 0.45, 0.16)},
+     "orbit_radius": 5.4, "orbit_eccentricity": 0.02,
+     "orbit_speed": 18.0, "phase": 110,
+     "spin": 6.0, "tilt": 177.0,
+     "halo": (1.0, 0.80, 0.45, 0.55)},
 
     {"name": "Earth", "texture": "earth", "radius": 0.45,
-     "orbit_radius": 7.5, "orbit_eccentricity": 0.03, "orbit_omega": 170,
+     "orbit_radius": 7.5, "orbit_eccentricity": 0.03,
      "orbit_speed": 14.0, "phase": 200,
-     "spin": 15.0, "tilt": 23.4, "clouds": True,
-     "halo": (0.35, 0.60, 1.0, 0.22),
+     "spin": 90.0, "tilt": 23.4, "clouds": True,
+     "halo": (0.35, 0.60, 1.0, 0.85),
      "moon": {"radius": 0.13, "dist": 0.95, "speed": 110.0}},
 
     {"name": "Mars", "texture": "mars", "radius": 0.35,
-     "orbit_radius": 9.9, "orbit_eccentricity": 0.06, "orbit_omega": 250,
-     "orbit_speed": 9.5, "phase": 300,
-     "spin": 14.4, "tilt": 25.2,
-     "halo": (1.0, 0.55, 0.35, 0.08)},
+     "orbit_radius": 9.9, "orbit_eccentricity": 0.06,
+     "orbit_speed": 11.0, "phase": 300,
+     "spin": 85.0, "tilt": 25.2,
+     "halo": (1.0, 0.55, 0.35, 0.25)},
 
     {"name": "Jupiter", "texture": "jupiter", "radius": 0.95,
-     "orbit_radius": 14.5, "orbit_eccentricity": 0.05, "orbit_omega": 40,
-     "orbit_speed": 4.5, "phase": 60,
-     "spin": 36.0, "tilt": 3.1},
+     "orbit_radius": 14.5, "orbit_eccentricity": 0.05,
+     "orbit_speed": 6.5, "phase": 60,
+     "spin": 180.0, "tilt": 3.1},
 
     {"name": "Saturn", "texture": "saturn", "radius": 0.80,
-     "orbit_radius": 19.5, "orbit_eccentricity": 0.05, "orbit_omega": 320,
-     "orbit_speed": 3.5, "phase": 250,
-     "spin": 33.0, "tilt": 26.7,
+     "orbit_radius": 19.5, "orbit_eccentricity": 0.05,
+     "orbit_speed": 4.8, "phase": 250,
+     "spin": 170.0, "tilt": 26.7,
      "rings": {"kind": "saturn", "inner": 1.25, "outer": 2.3}},
 
     {"name": "Uranus", "texture": "uranus", "radius": 0.60,
-     "orbit_radius": 25.0, "orbit_eccentricity": 0.03, "orbit_omega": 200,
-     "orbit_speed": 2.9, "phase": 150,
-     "spin": -20.0, "tilt": 97.8,
-     "halo": (0.50, 0.90, 0.95, 0.12),
+     "orbit_radius": 25.0, "orbit_eccentricity": 0.03,
+     "orbit_speed": 3.4, "phase": 150,
+     "spin": 110.0, "tilt": 97.8,
+     "halo": (0.50, 0.90, 0.95, 0.35),
      "rings": {"kind": "uranus", "inner": 1.5, "outer": 2.1}},
 
     {"name": "Neptune", "texture": "neptune", "radius": 0.60,
-     "orbit_radius": 28.5, "orbit_eccentricity": 0.01, "orbit_omega": 120,
-     "orbit_speed": 2.5, "phase": 330,
-     "spin": 22.0, "tilt": 28.3,
-     "halo": (0.30, 0.50, 1.0, 0.16)},
+     "orbit_radius": 28.5, "orbit_eccentricity": 0.01,
+     "orbit_speed": 2.7, "phase": 330,
+     "spin": 120.0, "tilt": 28.3,
+     "halo": (0.30, 0.50, 1.0, 0.50)},
 ]
-PLANET_INFO = {
-    "Mercury": {"a": 57.91, "period": "88 NGAY", "rotation": "58.6 NGAY",
-                "diameter": "4,879 KM", "temp": "167 C"},
-    "Venus":   {"a": 108.21, "period": "224.7 NGAY", "rotation": "243 NGAY (NGUOC)",
-                "diameter": "12,104 KM", "temp": "464 C"},
-    "Earth":   {"a": 149.60, "period": "365.25 NGAY", "rotation": "24 GIO",
-                "diameter": "12,742 KM", "temp": "15 C"},
-    "Mars":    {"a": 227.94, "period": "687 NGAY", "rotation": "24.6 GIO",
-                "diameter": "6,779 KM", "temp": "-65 C"},
-    "Jupiter": {"a": 778.57, "period": "11.86 NAM", "rotation": "9.9 GIO",
-                "diameter": "139,820 KM", "temp": "-110 C"},
-    "Saturn":  {"a": 1433.5, "period": "29.46 NAM", "rotation": "10.7 GIO",
-                "diameter": "116,460 KM", "temp": "-140 C"},
-    "Uranus":  {"a": 2872.5, "period": "84.0 NAM", "rotation": "17.2 GIO (NGUOC)",
-                "diameter": "50,724 KM", "temp": "-195 C"},
-    "Neptune": {"a": 4495.1, "period": "164.8 NAM", "rotation": "16.1 GIO",
-                "diameter": "49,244 KM", "temp": "-200 C"},
-}
-
-SUN_GM = 1.32712e11          # km^3/s^2
 
 
 # =====================================================================
@@ -376,7 +311,6 @@ _sphere_list = None
 _tex = {}
 _glow_tex = None
 _halo_tex = None
-_corona_tex = None
 
 
 def _upload(img, mip=True, clamp_s=False):
@@ -466,7 +400,7 @@ def _build_rings(kind, inner, outer, rng, steps=200, seg=128):
 
 def init_planets():
     """Goi 1 lan SAU khi da co OpenGL context."""
-    global _sphere_list, _glow_tex, _halo_tex, _corona_tex
+    global _sphere_list, _glow_tex, _halo_tex
 
     rng = np.random.default_rng(7)
 
@@ -484,22 +418,11 @@ def init_planets():
 
     _glow_tex = _radial_texture(lambda r: np.where(r < 1, np.clip(1 - r, 0, None) ** 2.4, 0))
     _halo_tex = _radial_texture(lambda r: np.exp(-((r - 0.72) / 0.10) ** 2))
-    yy, xx = np.mgrid[-1:1:256j, -1:1:256j]
-    r = np.hypot(xx, yy)
-    angle = np.arctan2(yy, xx)
-    filaments = (0.82
-                 + 0.10 * np.sin(angle * 9.0 + r * 13.0)
-                 + 0.08 * np.sin(angle * 19.0 - r * 21.0))
-    corona = np.exp(-((r - 1.10) / 0.40) ** 2) * np.clip(filaments, 0.35, 1.0)
-    corona_img = np.ones((256, 256, 4), np.float32)
-    corona_img[..., 3] = np.clip(corona, 0, 1)
-    _corona_tex = _upload(corona_img, mip=False, clamp_s=True)
 
     for p in PLANETS:
         p["tex"] = _tex[p["texture"]]
         if p.get("clouds"):
             p["clouds_tex"] = _tex["clouds"]
-            p["lights_tex"] = _tex["earth_lights"]
         if p.get("moon"):
             p["moon"]["tex"] = _tex["moon"]
         if p.get("rings"):
@@ -522,29 +445,6 @@ def _textured_sphere(tex, radius, spin=0.0):
     glCallList(_sphere_list)
     glPopMatrix()
     glDisable(GL_TEXTURE_2D)
-
-
-def _draw_atmosphere(radius, color):
-    """Lop mao khi trong suot: danh sang mem o ranh gioi thay vi neon deu."""
-    glDisable(GL_LIGHTING)
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE)
-    glEnable(GL_CULL_FACE)
-    glCullFace(GL_FRONT)
-    glDepthMask(GL_FALSE)
-    glEnable(GL_TEXTURE_2D)
-    glBindTexture(GL_TEXTURE_2D, _halo_tex)
-    glColor4f(*color)
-    glPushMatrix()
-    glScalef(radius * 1.09, radius * 1.09, radius * 1.09)
-    glCallList(_sphere_list)
-    glPopMatrix()
-    glBindTexture(GL_TEXTURE_2D, 0)
-    glDisable(GL_TEXTURE_2D)
-    glDepthMask(GL_TRUE)
-    glDisable(GL_CULL_FACE)
-    glDisable(GL_BLEND)
-    glEnable(GL_LIGHTING)
 
 
 def _draw_billboard(tex, half, color):
@@ -580,39 +480,13 @@ def draw_sun(t):
     glDisable(GL_LIGHTING)
     glPushMatrix()
     glRotatef(-90, 1, 0, 0)
-    _textured_sphere(_tex["sun"], 1.5, t * 1.4)
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE)
-    glDepthMask(GL_FALSE)
-    _textured_sphere(_tex["sun_flow"], 1.508, -t * 2.2)
-    _textured_sphere(_tex["sun_flow"], 1.516, t * 1.1)
-    glDepthMask(GL_TRUE)
-    glDisable(GL_BLEND)
+    _textured_sphere(_tex["sun"], 1.5, t * 4.0)
     glPopMatrix()
 
-    glPushMatrix()
-    glDisable(GL_LIGHTING)
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE)
-    glEnable(GL_CULL_FACE)
-    glCullFace(GL_FRONT)
-    glDepthMask(GL_FALSE)
-
-    for scale, alpha, red, green in (
-        (1.035, 0.28, 1.0, 0.58),
-        (1.090, 0.18, 1.0, 0.36),
-        (1.180, 0.09, 1.0, 0.20),
-    ):
-        glColor4f(red, green, 0.025, alpha)
-        glPushMatrix()
-        glScalef(scale * 1.50, scale * 1.50, scale * 1.50)
-        glCallList(_sphere_list)
-        glPopMatrix()
-    glDepthMask(GL_TRUE)
-    glDisable(GL_CULL_FACE)
-    glDisable(GL_BLEND)
-    glEnable(GL_LIGHTING)
-    glPopMatrix()
+    # Viền rìa sáng vàng cam (như ảnh mẫu) + quầng sáng đỏ cam phía ngoài
+    _draw_billboard(_halo_tex, 1.5 / 0.72 * 1.04, (1.0, 0.72, 0.22, 0.95))
+    _draw_billboard(_glow_tex, 4.2, (1.0, 0.45, 0.08, 0.80))
+    _draw_billboard(_glow_tex, 9.0, (1.0, 0.30, 0.05, 0.22))
     glEnable(GL_LIGHTING)
 
 
@@ -631,13 +505,9 @@ def _draw_rings(planet):
     glScalef(s, s, s)
     glEnable(GL_BLEND)
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-    glDisable(GL_LIGHTING)
-    glDepthFunc(GL_LEQUAL)
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_TRUE)
     glCallList(planet["ring_list"])
     glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, GL_FALSE)
-    glEnable(GL_LIGHTING)
-    glDepthFunc(GL_LESS)
     glDisable(GL_BLEND)
     glPopMatrix()
 
@@ -649,69 +519,21 @@ def planet_position(planet, t):
     Quỹ đạo nằm trên mặt phẳng XZ (y = 0).
     """
     ang = math.radians(planet["phase"] + t * planet["orbit_speed"])
-    return orbit_position(
+    x, z = orbit_position(
         planet["orbit_radius"],
         planet["orbit_eccentricity"],
         ang,
-        math.radians(planet.get("orbit_omega", 0.0)),
     )
-
-def planet_stats(planet, t):
-    """(khoảng cách tới Mặt Trời [triệu km], vận tốc [km/s]) tại thời điểm mô phỏng t.
-
-    Tỉ lệ r/a lấy từ chính quỹ đạo elip đang vẽ; vận tốc theo công thức vis-viva
-    v = sqrt(GM * (2/r - 1/a)) nên nhanh ở cận nhật, chậm ở viễn nhật.
-    """
-    a = PLANET_INFO[planet["name"]]["a"] * 1e6            # km
-    x, y, z = planet_position(planet, t)
-    r = math.sqrt(x * x + y * y + z * z) / planet["orbit_radius"] * a
-    v = math.sqrt(SUN_GM * (2.0 / r - 1.0 / a))
-    return r / 1e6, v
-
-NIGHT_GAIN = 3.2      # do "bat den": den sang hoan toan khi vao sau ~17 do ke tu ranh gioi ngay/dem
-
-
-def _draw_city_lights(tex, radius, spin):
-    """Den do thi: CHI hien o nua toi cua hanh tinh.
-
-    Dung GL_LIGHT1 chieu tu phia doi dien Mat Troi (huong da dat trong draw_planet), nen do sang
-    theo dinh = cos(goc so voi "nua dem"): bang 0 tai ranh gioi, tang dan vao sau ban dem.
-    Cong vao canh (GL_ONE, GL_ONE) nen khong lam toi mau nen.
-    """
-    if glGetFloatv(GL_LIGHT_MODEL_AMBIENT)[0] > 0.5:      # che do nen trang: khong ve den
-        return
-    glPushAttrib(GL_LIGHTING_BIT | GL_ENABLE_BIT | GL_COLOR_BUFFER_BIT |
-                 GL_DEPTH_BUFFER_BIT | GL_CURRENT_BIT)
-    glEnable(GL_LIGHTING)
-    glDisable(GL_LIGHT0)
-    glEnable(GL_LIGHT1)
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, (0.0, 0.0, 0.0, 1.0))
-    glLightfv(GL_LIGHT1, GL_AMBIENT, (0.0, 0.0, 0.0, 1.0))
-    glLightfv(GL_LIGHT1, GL_DIFFUSE, (NIGHT_GAIN, NIGHT_GAIN, NIGHT_GAIN, 1.0))
-    glLightfv(GL_LIGHT1, GL_SPECULAR, (0.0, 0.0, 0.0, 1.0))
-    glEnable(GL_BLEND)
-    glBlendFunc(GL_ONE, GL_ONE)
-    glDepthMask(GL_FALSE)
-    _textured_sphere(tex, radius, spin)
-    glPopAttrib()
+    return x, 0.0, z
 
 
 def draw_planet(planet, t):
-    x, y, z = planet_position(planet, t)
+    x, _, z = planet_position(planet, t)
     r = planet["radius"]
     spin = t * planet["spin"]
 
     glPushMatrix()
-    glTranslatef(x, y, z)
-
-    if planet.get("lights_tex"):
-        # Huong "doi dien Mat Troi" (Mat Troi o goc toa do). Phai dat ngay luc modelview moi
-        # chi co phep nhin + tinh tien, truoc khi xoay/nghieng hanh tinh.
-        d = math.sqrt(x * x + y * y + z * z) or 1.0
-        glLightfv(GL_LIGHT1, GL_POSITION, (x / d, y / d, z / d, 0.0))
-
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SHININESS, (72.0,))
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, (0.48, 0.48, 0.52, 1.0))
+    glTranslatef(x, 0.0, z)
 
     if planet.get("moon"):
         _draw_moon(planet["moon"], t)
@@ -729,14 +551,10 @@ def draw_planet(planet, t):
         glDepthMask(GL_TRUE)
         glDisable(GL_BLEND)
 
-    if planet.get("lights_tex"):
-        _draw_city_lights(planet["lights_tex"], r * 1.004, spin)
-
     if planet.get("ring_list"):
         _draw_rings(planet)
 
     if planet.get("halo"):
-        halo = planet["halo"]
-        _draw_atmosphere(r, (halo[0], halo[1], halo[2], halo[3]))
+        _draw_billboard(_halo_tex, r / 0.72, planet["halo"])
 
     glPopMatrix()

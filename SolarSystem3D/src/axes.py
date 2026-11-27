@@ -1,22 +1,40 @@
-"""Hệ trục toạ độ XYZ đặt tại tâm (Mặt Trời).
+"""Hệ trục toạ độ Oxyz đặt tại tâm (Mặt Trời).
 
-Các hành tinh chuyển động trên mặt phẳng XZ, trục Y hướng lên trên.
+Quy ước hiển thị: trục Z thẳng đứng (hướng lên), các hành tinh chuyển động trên
+mặt phẳng ngang XY (nên Z = 0), hệ thuận tay phải (X x Y = Z).
+
+Bên trong, OpenGL vẫn dùng Y hướng lên, nên toạ độ OpenGL (gx, gy, gz) và toạ độ
+hiển thị (X, Y, Z) liên hệ bằng to_axes_coords / to_gl:
+    X = gx,   Y = -gz,   Z = gy
 """
 import math
 from OpenGL.GL import *
 
-AXIS_LEN = 26.0        
-TICK_STEP = 2.0      
+AXIS_LEN = 22.0        # độ dài mỗi nửa trục (lớn hơn quỹ đạo Neptune)
+TICK_STEP = 2.0        # khoảng cách giữa các vạch chia
 TICK_SIZE = 0.15
 ARROW_LEN = 1.0
 ARROW_RADIUS = 0.35
 
+# (tên, hướng, hai hướng vuông góc, màu)
+# Hướng ghi theo toạ độ OpenGL: Z hiển thị = OpenGL +Y (lên), Y hiển thị = OpenGL -Z
 _AXES = (
     ("X", (1, 0, 0), ((0, 1, 0), (0, 0, 1)), (1.00, 0.30, 0.30)),
-    ("Y", (0, 1, 0), ((1, 0, 0), (0, 0, 1)), (0.35, 0.95, 0.35)),
-    ("Z", (0, 0, 1), ((1, 0, 0), (0, 1, 0)), (0.40, 0.60, 1.00)),
+    ("Y", (0, 0, -1), ((1, 0, 0), (0, 1, 0)), (0.35, 0.95, 0.35)),
+    ("Z", (0, 1, 0), ((1, 0, 0), (0, 0, 1)), (0.40, 0.60, 1.00)),
 )
 
+
+def to_axes_coords(p):
+    """Toạ độ OpenGL (gx, gy, gz) -> toạ độ hiển thị (X, Y, Z) với Z thẳng đứng."""
+    return (p[0], -p[2], p[1])
+
+
+def to_gl(c):
+    """Toạ độ hiển thị (X, Y, Z) -> toạ độ OpenGL (gx, gy, gz)."""
+    return (c[0], c[2], -c[1])
+
+# Nét vẽ của các chữ X, Y, Z (toạ độ -1..1)
 _LETTERS = {
     "X": [((-1, -1), (1, 1)), ((-1, 1), (1, -1))],
     "Y": [((-1, 1), (0, 0)), ((1, 1), (0, 0)), ((0, 0), (0, -1))],
@@ -98,12 +116,13 @@ def draw_axes(alpha=None):
 
 
 def coord_end_points(x, y, z):
-    """Điểm cuối của đoạn toạ độ trên mỗi trục: (x,0,0), (0,y,0), (0,0,z)."""
-    return (x, 0.0, 0.0), (0.0, y, 0.0), (0.0, 0.0, z)
+    """Điểm cuối (đã đổi sang toạ độ OpenGL để vẽ/chiếu) của đoạn toạ độ trên
+    mỗi trục. Đầu vào (x, y, z) là toạ độ hiển thị."""
+    return (to_gl((x, 0.0, 0.0)), to_gl((0.0, y, 0.0)), to_gl((0.0, 0.0, z)))
 
 
 def draw_coord_path(x, y, z):
-    """Hộp toạ độ của điểm (x, y, z), dựng từ gốc dọc theo CẢ BA trục.
+    """Hộp toạ độ của điểm (x, y, z) (toạ độ hiển thị), dựng từ gốc dọc theo CẢ BA trục.
 
     - Ba đoạn đặc kéo ra từ gốc dọc trục X (đỏ), Y (xanh lá), Z (xanh dương);
       độ dài mỗi đoạn chính là giá trị toạ độ trên trục đó.
@@ -148,8 +167,8 @@ def draw_coord_path(x, y, z):
     for k, a, b in edges(solid=False):
         c = _AXES[k][3]
         glColor4f(c[0], c[1], c[2], 0.9)
-        glVertex3f(*a)
-        glVertex3f(*b)
+        glVertex3f(*to_gl(a))
+        glVertex3f(*to_gl(b))
     glEnd()
     glDisable(GL_LINE_STIPPLE)
 
@@ -159,15 +178,15 @@ def draw_coord_path(x, y, z):
     for k, a, b in edges(solid=True):
         c = _AXES[k][3]
         glColor4f(c[0], c[1], c[2], 1.0)
-        glVertex3f(*a)
-        glVertex3f(*b)
+        glVertex3f(*to_gl(a))
+        glVertex3f(*to_gl(b))
     glEnd()
 
     # 3) Chấm tròn ở đầu mỗi đoạn (kể cả trục có toạ độ 0: chấm nằm tại gốc)
     glEnable(GL_POINT_SMOOTH)
     glPointSize(9.0)
     glBegin(GL_POINTS)
-    for (_, _, _, c), p in zip(_AXES, coord_end_points(x, y, z)):
+    for (_, _, _, c), p in zip(_AXES, coord_end_points(x, y, z)):  # đã ở toạ độ OpenGL
         glColor4f(c[0], c[1], c[2], 1.0)
         glVertex3f(*p)
     glEnd()

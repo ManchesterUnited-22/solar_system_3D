@@ -1,14 +1,4 @@
-"""Texture VE TAY (khong dung anh that, khong dung noise lam hinh dang luc dia).
 
-Hinh dang luc dia duoc ve bang da giac (kinh do, vi do) bang Pillow, sau do:
-  - lam gap ghenh bo bien bang nhieu (de bo bien giong that, khong thang),
-  - to mau theo vung (sa mac, rung mua, thao nguyen, taiga, nui, bang),
-  - ve day nui, song lon, dai bang bien.
-Ket qua duoc luu cache o assets/textures/ de lan sau khoi phai ve lai.
-
-Quy uoc: mang tra ve co shape (H, W, 3) hoac (H, W, 4), gia tri 0..1,
-hang 0 = cuc Nam (dung voi gluSphere/_upload trong planet.py).
-"""
 import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
@@ -102,10 +92,6 @@ def _fractal(pts, rng, depth=4, rough=0.2, closed=True):
         out.append(pts[-1])
     return out
 
-
-# =====================================================================
-#  DU LIEU VE TAY: DUONG BO (kinh do, vi do)
-# =====================================================================
 LAND = {
     "bac_my": [(-166, 68.5), (-156, 71.3), (-141, 69.6), (-128, 70), (-115, 68.5),
                (-108, 68), (-96, 68), (-90, 69), (-82, 69.5), (-85, 66.5), (-90, 64),
